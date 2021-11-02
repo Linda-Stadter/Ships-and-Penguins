@@ -18,15 +18,10 @@ __global__ void updateParticles(float dt, vec3 gravity, Saiga::ArrayView<Particl
         return;
     Particle &p = particles[ti.thread_id];
 
-    // 1.1
     p.momentum += p.d_momentum;
     p.d_momentum = {0,0,0};
     p.position += dt * p.momentum * p.massinv;
     p.momentum += dt * gravity / p.massinv;
-
-    // 1.2 TODO
-    //p.velocity += p.momentum * p.massinv;
-    //p.momentum = {0, 0, 0};
 }
 
 //__global__ void collisionWalls(float dt, Saiga::ArrayView<Particle> particles, Saiga::Plane wall, float elast_const, float spring_const, float frict_const);
@@ -134,7 +129,6 @@ __device__ float collideSphereSphere(Particle &particleA, Particle &particleB) {
 // particle particle
 __device__ vec3 resolveCollision(Particle &particleA, Particle &particleB, float d0, float dt, float elast_const, float spring_const, float frict_const) {
     vec3 n1 = (particleA.position - particleB.position).normalized();
-    // TODO momentum
     bool alive = particleA.momentum.dot(n1) * particleA.massinv - particleB.momentum.dot(n1) * particleB.massinv < 0;
     vec3 dp1e = {0, 0, 0};
     if (alive)
