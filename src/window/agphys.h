@@ -33,8 +33,11 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     void destroyParticles();
     void resetParticles();
 
+    void initWalls();
+
     // Deferred rendering and update functions (called from Saiga)
     void update(float dt) override;
+    void updateSingleStep(float dt);
     void interpolate(float dt, float interpolation) override;
     virtual void render(RenderInfo render_info) override;
     void parallelUpdate(float dt) override {}
@@ -45,7 +48,13 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
 
    private:
     // Particles
-    int numberParticles = 1000;
+    int numberParticles = 10000;
+    float distance = 0.99;
+    int xCount = 20;
+    int zCount = 20;
+    vec3 corner = {-10, 15, -10};
+
+    float stepsize = 0.01;
 
     std::shared_ptr<ParticleSystem> particleSystem;
 

@@ -15,6 +15,10 @@ void ParticleSystem::renderGUI()
 
     if(ImGui::Begin("ParticleSystem"))
     {
+        ImGui::InputFloat3("gravity", &gravity[0]);
+        ImGui::InputFloat("elast", &elast_const);
+        ImGui::InputFloat("spring", &spring_const);
+        ImGui::InputFloat("frict", &frict_const);
     }
     ImGui::End();
 }

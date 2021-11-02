@@ -22,12 +22,22 @@ class SAIGA_ALIGN(16) ParticleSystem
    public:
     int particleCount;
     ArrayView<Particle> d_particles;
+    ArrayView<Saiga::Plane> d_walls;
+
+    vec3 gravity = {0, -9.81, 0};
+    float elast_const = 0.2;
+    float spring_const = 800;
+    float frict_const = 0.1;
 
    public:
     ParticleSystem(int _particleCount);
     ~ParticleSystem();
 
+    const unsigned int BLOCK_SIZE = 64;
+    const unsigned int BLOCKS     = Saiga::CUDA::getBlockCount(particleCount, BLOCK_SIZE);
+
     void update(float dt);
+    void reset(int x, int z, vec3 corner, float distance);
     void setDevicePtr(void* ptr);
 
     void renderGUI();

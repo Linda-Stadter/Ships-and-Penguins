@@ -14,5 +14,6 @@ struct SAIGA_ALIGN(16) Particle
     vec4 color;
 
     vec3 momentum;
+    vec3 d_momentum;
     float massinv;
 };

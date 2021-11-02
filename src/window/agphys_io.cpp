@@ -18,11 +18,16 @@ void Agphys::renderGUI()
     if (ImGui::Begin("Agphys")) {
 
         ImGui::InputInt("particleCount", &numberParticles, 0, 10000);
+        ImGui::InputFloat("distance", &distance, 0.01, 0.1);
+        ImGui::InputInt("xCount", &xCount);
+        ImGui::InputInt("zCount", &zCount);
+        ImGui::InputFloat3("corner", &corner[0]);
 
         if (ImGui::Button("Create Particle System"))
         {
             destroyParticles();
             initParticles();
+            initWalls();
         }
 
         ImGui::Checkbox("renderParticles", &renderParticles);
@@ -34,6 +39,11 @@ void Agphys::renderGUI()
             pause = !pause;
         }
 
+        ImGui::InputFloat("stepsize", &stepsize, 0.001, 0.01);
+        if (ImGui::Button("step"))
+        {
+            updateSingleStep(stepsize);
+        }
 
         physicsGraph.renderImGui();
     }
@@ -92,6 +102,13 @@ void Agphys::keyPressed(int key, int scancode, int mods)
             window->close();
             break;
         case GLFW_KEY_R:
+            resetParticles();
+            break;
+        case GLFW_KEY_H:
+            pause = !pause;
+            break;
+        case GLFW_KEY_J:
+            updateSingleStep(stepsize);
             break;
         case GLFW_KEY_F12:
             break;

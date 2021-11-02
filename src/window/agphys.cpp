@@ -8,6 +8,8 @@
 
 #include "cuda_profiler_api.h"
 
+#include "cuda_runtime.h"
+
 Agphys::Agphys()
     : StandaloneWindow("config.ini")
 #ifdef SAIGA_USE_FFMPEG
@@ -57,6 +59,7 @@ Agphys::Agphys()
     particleDepthShaderFast = Saiga::shaderLoader.load<Saiga::MVPShader>(shader_name, {shadow_inj, shadow_inj2});
 
     initParticles();
+    initWalls();
 
     std::cout << "Agphys Initialized!" << std::endl;
 }
@@ -97,6 +100,61 @@ void Agphys::destroyParticles()
 {
     interop.unregisterBuffer();
     particleSystem.reset();
+}
+
+__host__ void checkError(cudaError_t err)
+{
+	if (err != cudaSuccess)
+	{
+		// Print a human readable error message
+		std::cout << cudaGetErrorString(err) << std::endl;
+		exit(-1);
+	}
+}
+
+void Agphys::initWalls()
+{
+    std::vector<Saiga::Plane> walls(5);
+    walls = std::vector<Saiga::Plane>({
+        Saiga::Plane({0,0,0},  {0,1,0} ),
+        Saiga::Plane({20,0,0}, {-1,0,0}),
+        Saiga::Plane({-20,0,0}, {1,0,0} ),
+        Saiga::Plane({0,0,20}, {0,0,-1}),
+        Saiga::Plane({0,0,-20}, {0,0,1} ),
+    });
+
+    auto size = sizeof (Saiga::Plane) * 5;
+
+    Saiga::Plane *planes;
+
+    checkError(cudaMalloc((void **)&planes, size));
+    checkError(cudaMemcpy(planes, walls.data(), size, cudaMemcpyHostToDevice));
+
+    // Initialize walls
+    particleSystem->d_walls = make_ArrayView(planes, 5);
+}
+
+void Agphys::updateSingleStep(float dt)
+{
+    if (renderer->use_keyboard_input_in_3dview) camera.update(dt);
+
+    sun->fitShadowToCamera(&camera);
+    sun->fitNearPlaneToScene(AABB(vec3(-125, 0, -125), vec3(125, 50, 125)));
+
+#ifdef SAIGA_USE_FFMPEG
+    enc.update();
+#endif
+
+    //if (pause) return;
+
+    map();
+    float t;
+    {
+        Saiga::CUDA::ScopedTimer tim(t);
+        particleSystem->update(dt);
+    }
+    physicsGraph.addTime(t);
+    unmap();
 }
 
 void Agphys::update(float dt)
@@ -180,6 +238,7 @@ void Agphys::resetParticles()
 {
     map();
     // reset particles
+    particleSystem->reset(xCount, zCount, corner, distance);
     unmap();
 }
 
