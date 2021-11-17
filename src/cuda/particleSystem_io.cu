@@ -19,6 +19,18 @@ void ParticleSystem::renderGUI()
         ImGui::InputFloat("elast", &elast_const);
         ImGui::InputFloat("spring", &spring_const);
         ImGui::InputFloat("frict", &frict_const);
+
+        ImGui::InputInt("solverIterations", &solverIterations);
+        ImGui::Checkbox("useCalculatedRelaxP", &useCalculatedRelaxP);
+        ImGui::InputFloat("relax", &relaxP);
+        ImGui::InputFloat("damp", &dampV);
+        ImGui::Checkbox("Jacobi Solver (or Gauss-Seidel)", &jacobi);
+
+        ImGui::Combo("physics", &physicsMode, physics, std::size(physics));
+        ImGui::Combo("mouse action", &actionMode, actions, std::size(actions));
+        ImGui::ColorEdit4("color", &color[0]);
+        ImGui::InputInt("explosionForce", &explosionForce);
+        ImGui::InputInt("splitCount", &splitCount);
     }
     ImGui::End();
 }

@@ -238,7 +238,7 @@ void Agphys::resetParticles()
 {
     map();
     // reset particles
-    particleSystem->reset(xCount, zCount, corner, distance);
+    particleSystem->reset(xCount, zCount, corner, distance, randInitMul);
     unmap();
 }
 

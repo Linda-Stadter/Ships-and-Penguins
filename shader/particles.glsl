@@ -2,6 +2,8 @@
 #version 400
 #extension GL_ARB_explicit_uniform_location : enable
 
+#define USE_PARTICLE_COLOR
+
 layout(location=0) in vec4 in_position_radius;
 
 #ifdef USE_PARTICLE_COLOR

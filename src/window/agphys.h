@@ -53,6 +53,7 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     int xCount = 20;
     int zCount = 20;
     vec3 corner = {-10, 15, -10};
+    float randInitMul = 0.001;
 
     float stepsize = 0.01;
 

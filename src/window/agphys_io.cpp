@@ -22,6 +22,7 @@ void Agphys::renderGUI()
         ImGui::InputInt("xCount", &xCount);
         ImGui::InputInt("zCount", &zCount);
         ImGui::InputFloat3("corner", &corner[0]);
+        ImGui::InputFloat("rand", &randInitMul);
 
         if (ImGui::Button("Create Particle System"))
         {
@@ -34,13 +35,13 @@ void Agphys::renderGUI()
         ImGui::Checkbox("renderShadows", &renderShadows);
         ImGui::Checkbox("showSaigaGui", &showSaigaGui);
 
-        if (ImGui::Button("Pause"))
+        if (ImGui::Button("Pause (H)"))
         {
             pause = !pause;
         }
 
         ImGui::InputFloat("stepsize", &stepsize, 0.001, 0.01);
-        if (ImGui::Button("step"))
+        if (ImGui::Button("step (J)"))
         {
             updateSingleStep(stepsize);
         }
@@ -123,7 +124,7 @@ void Agphys::keyPressed(int key, int scancode, int mods)
 
 void Agphys::mousePressed(int key, int x, int y)
 {
-    if (ImGui::GetIO().WantCaptureMouse) return;
+    if (!renderer->use_mouse_input_in_3dview) return;
     ivec2 global_pixel = ivec2(x, y);
     ivec2 local_pixel = renderer->WindowCoordinatesToViewport(global_pixel);
 
@@ -132,6 +133,6 @@ void Agphys::mousePressed(int key, int x, int y)
         // this gives a ray going through the camera position and the given pixel in world space
         auto ray =
             camera.PixelRay(local_pixel.cast<float>(), renderer->viewport_size.x(), renderer->viewport_size.y(), true);
-
+        particleSystem->ray(ray);
     }
 }
