@@ -9,15 +9,21 @@ using namespace Saiga;
 
 struct SAIGA_ALIGN(16) Particle
 {
-    vec3 position;
+    vec3 predicted;
     float radius;
 
     vec4 color;
 
+    vec3 position;
+    vec3 d_predicted;
     vec3 momentum;
     vec3 d_momentum;
     vec3 velocity;
-    vec3 predicted;
-    vec3 d_predicted;
     float massinv;
+};
+
+struct SAIGA_ALIGN(16) ParticleCalc
+{
+    vec3 predicted;
+    float radius;
 };

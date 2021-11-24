@@ -74,7 +74,9 @@ void Agphys::initParticles()
 {
     destroyParticles();
 
-    particleSystem = std::make_shared<ParticleSystem>(numberParticles);
+    vec3 boxMin = - boxDim / 2;
+    boxMin[1] = 0;
+    particleSystem = std::make_shared<ParticleSystem>(numberParticles, boxMin, boxDim);
 
     // initialize particles with some random values
     std::vector<Particle> particles(numberParticles);
@@ -115,12 +117,15 @@ __host__ void checkError(cudaError_t err)
 void Agphys::initWalls()
 {
     std::vector<Saiga::Plane> walls(5);
+
+    vec3 boxDim2  = boxDim / 2;
+
     walls = std::vector<Saiga::Plane>({
         Saiga::Plane({0,0,0},  {0,1,0} ),
-        Saiga::Plane({20,0,0}, {-1,0,0}),
-        Saiga::Plane({-20,0,0}, {1,0,0} ),
-        Saiga::Plane({0,0,20}, {0,0,-1}),
-        Saiga::Plane({0,0,-20}, {0,0,1} ),
+        Saiga::Plane({boxDim2[0],0,0}, {-1,0,0}),
+        Saiga::Plane({-boxDim2[0],0,0}, {1,0,0}),
+        Saiga::Plane({0,0,boxDim2[2]}, {0,0,-1}),
+        Saiga::Plane({0,0,-boxDim2[2]}, {0,0,1}),
     });
 
     auto size = sizeof (Saiga::Plane) * 5;
@@ -174,7 +179,22 @@ void Agphys::update(float dt)
     float t;
     {
         Saiga::CUDA::ScopedTimer tim(t);
+        
+        // profiling
+        #undef CUDA_PROFILING
+        #ifdef CUDA_PROFILING
+        if (steps == 300)
+            cudaProfilerStart();
+        #endif
+
         particleSystem->update(dt);
+
+        #ifdef CUDA_PROFILING
+        if (steps++ == 300) {
+            cudaProfilerStop();
+            window->close();
+        }
+        #endif
     }
     physicsGraph.addTime(t);
     unmap();

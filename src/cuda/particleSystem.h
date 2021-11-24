@@ -41,7 +41,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     bool jacobi = true;
     float dampV = 1.0;
     float relaxP = 0.25;
-    int solverIterations = 3;
+    int solverIterations = 2;
     bool useCalculatedRelaxP = true;
 
     float lastDt = 0;
@@ -49,8 +49,8 @@ class SAIGA_ALIGN(16) ParticleSystem
     int *d_rayHitCount;
 
     // GUI
-    const char* physics[3] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based"};
-    int physicsMode = 2;
+    const char* physics[5] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based", "Force Based + Linked Cell", "3.0 Position Based + Linked Cell"};
+    int physicsMode = 4;
     const char* actions[7] = {"Color", "Impulse", "Explode", "Implode", "Split", "Inflate", "Deflate"};
     int actionMode = 0;
 
@@ -59,8 +59,24 @@ class SAIGA_ALIGN(16) ParticleSystem
     int explosionForce = 25;
     int splitCount = 10;
 
+    vec3 boxDim;
+    vec3 boxMin;
+    ivec3 cellDim;
+    int cellCount;
+    int hashFunction = 1;
+    // GUI
+    const char* hashes[2] = {"random Hashing", "spatial Hashing"};
+
+    float maxParticleRadius = 0.5;
+    float cellSize;
+    int* d_particle_list, * d_cell_list;
+
+    // debug
+    unsigned long steps = 0;
+    cudaStream_t stream1, stream2, stream3;
+
    public:
-    ParticleSystem(int _particleCount);
+    ParticleSystem(int _particleCount, vec3 boxMin, vec3 boxDim);
     ~ParticleSystem();
 
     const unsigned int BLOCK_SIZE = 128;

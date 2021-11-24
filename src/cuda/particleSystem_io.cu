@@ -31,6 +31,9 @@ void ParticleSystem::renderGUI()
         ImGui::ColorEdit4("color", &color[0]);
         ImGui::InputInt("explosionForce", &explosionForce);
         ImGui::InputInt("splitCount", &splitCount);
+
+        ImGui::Separator();
+        ImGui::Combo("hashing", &hashFunction, hashes, std::size(hashes));
     }
     ImGui::End();
 }

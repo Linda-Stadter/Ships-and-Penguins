@@ -22,6 +22,7 @@ void Agphys::renderGUI()
         ImGui::InputInt("xCount", &xCount);
         ImGui::InputInt("zCount", &zCount);
         ImGui::InputFloat3("corner", &corner[0]);
+        ImGui::InputFloat3("boxDim", &boxDim[0]);
         ImGui::InputFloat("rand", &randInitMul);
 
         if (ImGui::Button("Create Particle System"))

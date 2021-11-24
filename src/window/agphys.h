@@ -47,12 +47,28 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     void mousePressed(int key, int x, int y) override;
 
    private:
+    unsigned int steps = 0;
+
     // Particles
+    //#define SMALL
+    #ifdef SMALL
     int numberParticles = 10000;
     float distance = 0.99;
     int xCount = 20;
     int zCount = 20;
     vec3 corner = {-10, 15, -10};
+    vec3 boxDim = {40, 40, 40};
+    #endif
+    #ifndef SMALL
+    int numberParticles = 1000000;
+    float distance = 0.99;
+    int xCount = 200;
+    int zCount = 200;
+    vec3 corner = {-100, -1, -100};
+    vec3 boxDim = {200, 100, 200};
+    #endif
+
+
     float randInitMul = 0.001;
 
     float stepsize = 0.01;
