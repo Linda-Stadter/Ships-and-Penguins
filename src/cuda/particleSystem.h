@@ -25,6 +25,12 @@ class SAIGA_ALIGN(16) ParticleSystem
     ArrayView<Particle> d_particles;
     ArrayView<Saiga::Plane> d_walls;
 
+    int particleCountRB = 0;
+    int maxRigidBodyCount = 50;
+    int rigidBodyCount = 0;
+    RigidBody *d_rigidBodies;
+    void constraintsShapeMatchingRB();
+
     int *d_constraintCounter;
     int *d_constraintList;
     int maxConstraintNum = particleCount*16;
@@ -49,8 +55,8 @@ class SAIGA_ALIGN(16) ParticleSystem
     int *d_rayHitCount;
 
     // GUI
-    const char* physics[5] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based", "Force Based + Linked Cell", "3.0 Position Based + Linked Cell"};
-    int physicsMode = 4;
+    const char* physics[6] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based", "Force Based + Linked Cell", "3.0 Position Based + Linked Cell", "4.0 Rigid Body"};
+    int physicsMode = 5;
     const char* actions[7] = {"Color", "Impulse", "Explode", "Implode", "Split", "Inflate", "Deflate"};
     int actionMode = 0;
 

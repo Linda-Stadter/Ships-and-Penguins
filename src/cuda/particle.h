@@ -20,10 +20,21 @@ struct SAIGA_ALIGN(16) Particle
     vec3 d_momentum;
     vec3 velocity;
     float massinv;
+
+    // 4.0
+    int rbID;
+    vec3 relative;
 };
 
 struct SAIGA_ALIGN(16) ParticleCalc
 {
     vec3 predicted;
     float radius;
+};
+
+struct SAIGA_ALIGN(16) RigidBody
+{
+    int particleCount;
+    vec3 originOfMass;
+    mat3 A;
 };

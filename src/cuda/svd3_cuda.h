@@ -451,6 +451,7 @@ __host__ __device__ __forceinline__ mat3 pd_eigen(const mat3& A)
     return svd.matrixU() * svd.matrixV().transpose();
 }
 
+/*
 __host__ __device__ __forceinline__ mat3 pd_eigen2(const mat3& C)
 {
     mat3 U1, V1;
@@ -471,5 +472,5 @@ __host__ __device__ __forceinline__ mat3 pd_eigen2(const mat3& C)
     }
     return U1 * V1.transpose();
 }
-
+*/
 }  // namespace svd3_cuda

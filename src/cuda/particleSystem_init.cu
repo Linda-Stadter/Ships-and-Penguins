@@ -17,6 +17,8 @@ ParticleSystem::ParticleSystem(int _particleCount, vec3 _boxMin, vec3 _boxDim)
     checkError(cudaMalloc((void **)&d_constraintCounterWalls, sizeof(int) * 1));
     checkError(cudaMalloc((void **)&d_rayHitCount, sizeof(int) * 1));
 
+    checkError(cudaMalloc((void **)&d_rigidBodies, sizeof(RigidBody) * maxRigidBodyCount));
+
     float minCellSize = 2.0 * maxParticleRadius;
     cellSize = minCellSize;
     cellDim = {int(ceil(boxDim[0] / cellSize)), int(ceil(boxDim[1] / cellSize)), int(ceil(boxDim[2] / cellSize))};
@@ -39,6 +41,8 @@ ParticleSystem::~ParticleSystem()
 
     checkError(cudaFree(d_particle_list));
 	checkError(cudaFree(d_cell_list));
+
+	checkError(cudaFree(d_rigidBodies));
 
     std::cout << "~ParticleSystem" << std::endl;
 }
