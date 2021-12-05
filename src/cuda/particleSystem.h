@@ -29,7 +29,11 @@ class SAIGA_ALIGN(16) ParticleSystem
     int maxRigidBodyCount = 50;
     int rigidBodyCount = 0;
     RigidBody *d_rigidBodies;
+    void initRigidBodies(float distance);
+
     void constraintsShapeMatchingRB();
+
+    int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot);
 
     int *d_constraintCounter;
     int *d_constraintList;

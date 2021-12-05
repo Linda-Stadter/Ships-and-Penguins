@@ -1,4 +1,7 @@
-﻿#include "particleSystem.h"
+﻿#define _USE_MATH_DEFINES
+#include <cmath>
+
+#include "particleSystem.h"
 #include "saiga/core/util/assert.h"
 
 //#include "saiga/cuda/cudaHelper.h"
@@ -11,6 +14,10 @@
 #include "saiga/core/math/random.h"
 
 #include "svd3_cuda.h"
+
+// 4.4
+#include "saiga/core/geometry/AccelerationStructure.h"
+#include "saiga/core/geometry/intersection.h"
 
 void ParticleSystem::setDevicePtr(void* particleVbo) {
     d_particles = ArrayView<Particle>((Particle*) particleVbo, particleCount);
@@ -107,7 +114,7 @@ __global__ void resetParticles(int x, int z, vec3 corner, float distance, Saiga:
 }
 
 // 4.0
-__global__ void initRigidBody(Saiga::ArrayView<Particle> particles, int id, vec3 pos, ivec3 dim, vec3 rot, int particleCountRB, RigidBody *rigidBodies) {
+__global__ void initCuboidParticles(Saiga::ArrayView<Particle> particles, int id, vec3 pos, ivec3 dim, vec3 rot, int particleCountRB, RigidBody *rigidBodies) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > 0)
         return;
@@ -117,7 +124,6 @@ __global__ void initRigidBody(Saiga::ArrayView<Particle> particles, int id, vec3
         * Eigen::AngleAxisf(rot.y(), vec3::UnitY())
         * Eigen::AngleAxisf(rot.z(), vec3::UnitZ());
     
-    vec3 originOfMass = {0, 0, 0};
     int count = dim.x() * dim.y() * dim.z();
 
     for (int i = 0; i < dim.x(); i++) {
@@ -130,31 +136,77 @@ __global__ void initRigidBody(Saiga::ArrayView<Particle> particles, int id, vec3
                 particles[particleCountRB].predicted = particles[particleCountRB].position;
                 particles[particleCountRB].rbID = id;
 
-                originOfMass += p;
-                particleCountRB++;
-            }
-        }
-    }
-
-    originOfMass /= (float)count;
-
-    Particle &p = particles[0];
-    //printf("%i, %f, %f, %f\n", p.rbID, originOfMass[0], originOfMass[1], originOfMass[2]);
-
-    particleCountRB -= count;
-    for (int i = 0; i < dim.x(); i++) {
-        for (int j = 0; j < dim.y(); j++) {
-            for (int k = 0; k < dim.z(); k++) {
-                particles[particleCountRB].relative = originOfMass - particles[particleCountRB].position;
-
                 particleCountRB++;
             }
         }
     }
 
     rigidBodies[id].particleCount = count;
-    rigidBodies[id].originOfMass = {0, 0, 0};
-    rigidBodies[id].A = mat3::Zero().cast<float>();
+}
+
+__global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles, int id, vec3 pos, int particleCountRB, RigidBody *rigidBodies) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id > 0)
+        return;
+    
+    particles[particleCountRB].position = pos;
+    particles[particleCountRB].predicted = particles[particleCountRB].position;
+    particles[particleCountRB].rbID = id;
+
+    rigidBodies[id].particleCount++;
+}
+
+__global__ void initRigidBodyParticles(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id >= particleCountRB)
+        return;
+    
+    particles[ti.thread_id].relative = rigidBodies[particles[ti.thread_id].rbID].originOfMass - particles[ti.thread_id].position;
+}
+
+// 4.4
+int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot) {
+    Saiga::UnifiedModel model("objs/teapot.obj");
+    Saiga::UnifiedMesh mesh = model.CombinedMesh().first;
+    std::vector<Triangle> triangles = mesh.TriangleSoup();
+    // 1
+    Saiga::AABB bb = mesh.BoundingBox(); // TODO model.BoundingBox() ?
+    vec3 min = bb.min;
+    vec3 max = bb.max;
+    // 2
+    // Schnittstellen
+    float maxObjParticleCount = 40;
+    float maxSize = bb.maxSize();
+    //float sampleDistance = 0.1;
+    float sampleDistance = maxSize / maxObjParticleCount;
+    int count = 0;
+    Saiga::AccelerationStructure::ObjectMedianBVH omBVH(triangles);
+    for (float x = min.x(); x < max.x(); x += sampleDistance) {
+        for (float y = min.y(); y < max.y(); y += sampleDistance) {
+            for (float z = min.z(); z < max.z(); z += sampleDistance) {
+                vec3 ori = {x,y,z};
+                bool isInside = true;
+                for (float dx = -1; dx < 2; dx += 2) {
+                    for (float dy = -1; dy < 2; dy += 2) {
+                        for (float dz = -1; dz < 2; dz += 2) {
+                            vec3 dir = {dx,dy,dz};
+                            Saiga::Ray ray(dir, ori);
+                            Saiga::Intersection::RayTriangleIntersection rti = omBVH.getClosest(ray);
+                            if (!rti.valid)
+                                isInside = false;
+                        }
+                    }
+                }
+                if (isInside) {
+                    count++;
+                    float scaling = 1.0f;
+                    vec3 position = pos + ori*(scaling / sampleDistance); // TODO 
+                    initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, particleCountRB++, d_rigidBodies);
+                }
+            }
+        }
+    }
+    return count;
 }
 
 __global__ void caclulateRigidBodyOriginOfMass(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies) {
@@ -261,24 +313,41 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     resetParticles<<<BLOCKS, BLOCK_SIZE>>>(x, z, corner, distance, d_particles, randInitMul);
     CUDA_SYNC_CHECK_ERROR();
 
-    // 4.0
+    initRigidBodies(distance);
+}
+
+// 4.0
+void ParticleSystem::initRigidBodies(float distance) {
+    
     particleCountRB = 0;
     rigidBodyCount = 0;
+
+    vec3 pos = linearRand(vec3(-50, 30, -50), vec3(50, 60, 50));
+    vec3 rot = linearRand(vec3(0, 0, 0), vec3(M_PI_2, M_PI_2, M_PI_2));
+    int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot);
+    particleCountRB += objParticleCount;
+    printf("%i\n", objParticleCount);
 
     for (int i = 0; i < 20; i++) {
         ivec3 dim = linearRand(ivec3(3,3,3), ivec3(10,10,10));
         vec3 pos = linearRand(vec3(-50, 30, -50), vec3(50, 60, 50));
         vec3 rot = linearRand(vec3(0, 0, 0), vec3(M_PI_2, M_PI_2, M_PI_2));
-        initRigidBody<<<1, 32>>>(d_particles, rigidBodyCount, pos, dim, rot, particleCountRB, d_rigidBodies);
+        initCuboidParticles<<<1, 32>>>(d_particles, rigidBodyCount++, pos, dim, rot, particleCountRB, d_rigidBodies);
         CUDA_SYNC_CHECK_ERROR();
         particleCountRB += dim.x() * dim.y() * dim.z();
-        rigidBodyCount++;
     }
     deactivateNonRB<<<BLOCKS, BLOCK_SIZE>>>(d_particles);
     CUDA_SYNC_CHECK_ERROR();
     // TODO
     resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
-    //caclulateRigidBodyOriginOfMass<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies); // TODO noetig?
+    CUDA_SYNC_CHECK_ERROR();
+
+    caclulateRigidBodyOriginOfMass<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies);
+    CUDA_SYNC_CHECK_ERROR();
+    initRigidBodyParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies);
+    CUDA_SYNC_CHECK_ERROR();
+
+    resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
 }
 
