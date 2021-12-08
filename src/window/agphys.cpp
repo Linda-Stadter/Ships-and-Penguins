@@ -58,6 +58,7 @@ Agphys::Agphys()
     particleShaderFast  = Saiga::shaderLoader.load<Saiga::MVPShader>(shader_name, {});
     particleDepthShaderFast = Saiga::shaderLoader.load<Saiga::MVPShader>(shader_name, {shadow_inj, shadow_inj2});
 
+    loadScenario();
     initParticles();
     initWalls();
 
@@ -67,6 +68,32 @@ Agphys::Agphys()
 Agphys::~Agphys()
 {
     std::cout << "~Agphys" << std::endl;
+}
+
+void Agphys::loadScenario()
+{
+    if (scenario == 1) {
+        numberParticles = 10000;
+        distance = 0.99;
+        xCount = 20;
+        zCount = 20;
+        corner = {-10, 15, -10};
+        boxDim = {40, 40, 40};
+    } else if (scenario == 2) {
+        numberParticles = 1000000;
+        distance = 0.99;
+        xCount = 200;
+        zCount = 200;
+        corner = {-100, 0.5, -100};
+        boxDim = {200, 100, 200};
+    } else {
+        numberParticles = 100000;
+        distance = 0.99;
+        xCount = 200;
+        zCount = 200;
+        corner = {-100, 0.5, -100};
+        boxDim = {200, 100, 200};
+    }
 }
 
 
@@ -258,7 +285,7 @@ void Agphys::resetParticles()
 {
     map();
     // reset particles
-    particleSystem->reset(xCount, zCount, corner, distance, randInitMul);
+    particleSystem->reset(xCount, zCount, corner, distance, randInitMul, scenario);
     unmap();
 }
 

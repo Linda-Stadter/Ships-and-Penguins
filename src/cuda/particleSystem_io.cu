@@ -27,6 +27,7 @@ void ParticleSystem::renderGUI()
         ImGui::Checkbox("Jacobi Solver (or Gauss-Seidel)", &jacobi);
 
         ImGui::Combo("physics", &physicsMode, physics, std::size(physics));
+        ImGui::Checkbox("use SDF", &useSDF); // 4.4
         ImGui::Combo("mouse action", &actionMode, actions, std::size(actions));
         ImGui::ColorEdit4("color", &color[0]);
         ImGui::InputInt("explosionForce", &explosionForce);

@@ -29,11 +29,13 @@ class SAIGA_ALIGN(16) ParticleSystem
     int maxRigidBodyCount = 50;
     int rigidBodyCount = 0;
     RigidBody *d_rigidBodies;
-    void initRigidBodies(float distance);
+    void initRigidBodies(float distance, int scenario);
 
     void constraintsShapeMatchingRB();
+    void updateRigidBodies();
 
-    int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot);
+    int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color);
+    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color);
 
     int *d_constraintCounter;
     int *d_constraintList;
@@ -81,6 +83,9 @@ class SAIGA_ALIGN(16) ParticleSystem
     float cellSize;
     int* d_particle_list, * d_cell_list;
 
+    // 4.4
+    bool useSDF = true;
+
     // debug
     unsigned long steps = 0;
     cudaStream_t stream1, stream2, stream3;
@@ -93,7 +98,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     const unsigned int BLOCKS     = Saiga::CUDA::getBlockCount(particleCount, BLOCK_SIZE);
 
     void update(float dt);
-    void reset(int x, int z, vec3 corner, float distance, float randInitMul);
+    void reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario);
     void ray(Saiga::Ray ray);
     void setDevicePtr(void* ptr);
 

@@ -18,6 +18,7 @@
 // 4.4
 #include "saiga/core/geometry/AccelerationStructure.h"
 #include "saiga/core/geometry/intersection.h"
+#include <utility>
 
 void ParticleSystem::setDevicePtr(void* particleVbo) {
     d_particles = ArrayView<Particle>((Particle*) particleVbo, particleCount);
@@ -111,10 +112,12 @@ __global__ void resetParticles(int x, int z, vec3 corner, float distance, Saiga:
 
     // 4.0
     p.rbID = -1;
+    p.relative = {0,0,0};
+    p.sdf = {0,0,0};
 }
 
-// 4.0
-__global__ void initCuboidParticles(Saiga::ArrayView<Particle> particles, int id, vec3 pos, ivec3 dim, vec3 rot, int particleCountRB, RigidBody *rigidBodies) {
+// 4.0 TODO fix or remove
+__global__ void initCuboidParticles(Saiga::ArrayView<Particle> particles, int id, vec3 pos, ivec3 dim, vec3 rot, vec4 color, int particleCountRB, RigidBody *rigidBodies) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > 0)
         return;
@@ -133,8 +136,50 @@ __global__ void initCuboidParticles(Saiga::ArrayView<Particle> particles, int id
                 p = rotMat * p;
                 p += pos;
                 particles[particleCountRB].position = p;
-                particles[particleCountRB].predicted = particles[particleCountRB].position;
+                particles[particleCountRB].predicted = p;
                 particles[particleCountRB].rbID = id;
+
+                particles[particleCountRB].color = color;
+
+                //4.4
+                ivec3 idx = {i, j, k};
+                ivec3 dim2 = (dim/2);
+                ivec3 dir;
+                dir.x() = idx.x() < dim2.x() ? idx.x() - dim2.x() : dim2.x() - (dim.x() - idx.x() - 1);
+                dir.y() = idx.y() < dim2.y() ? idx.y() - dim2.y() : dim2.y() - (dim.y() - idx.y() - 1);
+                dir.z() = idx.z() < dim2.z() ? idx.z() - dim2.z() : dim2.z() - (dim.z() - idx.z() - 1);
+                //float m = min(min(fabs(sdf.x()), fabs(sdf.y())), fabs(sdf.z()));
+
+                ivec3 absdir = {abs(dir.x()), abs(dir.y()), abs(dir.z())};
+
+                int minDir = max(max(absdir.x(), absdir.y()), absdir.z());
+                vec3 sdf = {0,0,0};
+
+                ivec3 dirSign = dir;
+                dirSign.x() = dirSign.x() > 0 ? 1 : dirSign.x();
+                dirSign.x() = dirSign.x() < 0 ? -1 : dirSign.x();
+                dirSign.y() = dirSign.y() > 0 ? 1 : dirSign.y();
+                dirSign.y() = dirSign.y() < 0 ? -1 : dirSign.y();
+                dirSign.z() = dirSign.z() > 0 ? 1 : dirSign.z();
+                dirSign.z() = dirSign.z() < 0 ? -1 : dirSign.z();
+
+                if (absdir.x() == minDir)
+                    sdf.x() = dirSign.x();
+                if (absdir.y() == minDir)
+                    sdf.y() = dirSign.y();
+                if (absdir.z() == minDir)
+                    sdf.z() = dirSign.z();
+
+
+                int mx = min(i + 1, dim.x() - i);
+                int my = min(j + 1, dim.y() - j);
+                int mz = min(k + 1, dim.z() - k);
+
+                float m = min(min(mx, my), mz);
+
+                particles[particleCountRB].sdf = -m * normalize(sdf);// minus to point inwards
+
+                printf("%i %i %i, %f, %f, %f, %f\n", i, j, k, sdf.x(), sdf.y(), sdf.z(), m);
 
                 particleCountRB++;
             }
@@ -144,14 +189,19 @@ __global__ void initCuboidParticles(Saiga::ArrayView<Particle> particles, int id
     rigidBodies[id].particleCount = count;
 }
 
-__global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles, int id, vec3 pos, int particleCountRB, RigidBody *rigidBodies) {
+__global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles, int id, vec3 pos, vec3 sdf, vec4 color, int particleCountRB, RigidBody *rigidBodies) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > 0)
         return;
     
     particles[particleCountRB].position = pos;
-    particles[particleCountRB].predicted = particles[particleCountRB].position;
+    particles[particleCountRB].predicted = pos;
     particles[particleCountRB].rbID = id;
+
+    particles[particleCountRB].color = color;
+
+    // 4.4
+    particles[particleCountRB].sdf = sdf;
 
     rigidBodies[id].particleCount++;
 }
@@ -161,11 +211,11 @@ __global__ void initRigidBodyParticles(Saiga::ArrayView<Particle> particles, int
     if (ti.thread_id >= particleCountRB)
         return;
     
-    particles[ti.thread_id].relative = rigidBodies[particles[ti.thread_id].rbID].originOfMass - particles[ti.thread_id].position;
+    particles[ti.thread_id].relative = particles[ti.thread_id].predicted - rigidBodies[particles[ti.thread_id].rbID].originOfMass;
 }
 
 // 4.4
-int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot) {
+int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color) {
     Saiga::UnifiedModel model("objs/teapot.obj");
     Saiga::UnifiedMesh mesh = model.CombinedMesh().first;
     std::vector<Triangle> triangles = mesh.TriangleSoup();
@@ -181,31 +231,264 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
     float sampleDistance = maxSize / maxObjParticleCount;
     int count = 0;
     Saiga::AccelerationStructure::ObjectMedianBVH omBVH(triangles);
-    for (float x = min.x(); x < max.x(); x += sampleDistance) {
-        for (float y = min.y(); y < max.y(); y += sampleDistance) {
-            for (float z = min.z(); z < max.z(); z += sampleDistance) {
-                vec3 ori = {x,y,z};
-                bool isInside = true;
-                for (float dx = -1; dx < 2; dx += 2) {
-                    for (float dy = -1; dy < 2; dy += 2) {
-                        for (float dz = -1; dz < 2; dz += 2) {
-                            vec3 dir = {dx,dy,dz};
-                            Saiga::Ray ray(dir, ori);
-                            Saiga::Intersection::RayTriangleIntersection rti = omBVH.getClosest(ray);
-                            if (!rti.valid)
-                                isInside = false;
+
+    if (useSDF) {
+        // 3d voxel grid
+        vec3 size = bb.Size() / sampleDistance;
+        const int xDim = ceil(size.x());
+        const int yDim = ceil(size.y());
+        const int zDim = ceil(size.z());
+
+        auto ***voxel = new std::pair<int, vec3>**[zDim];
+        for(int i = 0; i < zDim; ++i) {
+            voxel[i] = new std::pair<int, vec3>*[yDim];
+            for(int j = 0; j < yDim; ++j) {
+                voxel[i][j] = new std::pair<int, vec3>[xDim];
+            }
+        }
+        // init voxels
+        for (int x = 0; x < xDim; x++) {
+            for (int y = 0; y < yDim; y++) {
+                for (int z = 0; z < zDim; z++) {
+                    vec3 ori = min + sampleDistance * vec3{x, y, z};
+                    bool isInside = true;
+                    for (float dx = -1; dx < 2; dx += 2) {
+                        for (float dy = -1; dy < 2; dy += 2) {
+                            for (float dz = -1; dz < 2; dz += 2) {
+                                vec3 dir = {dx,dy,dz};
+                                Saiga::Ray ray(dir, ori);
+                                Saiga::Intersection::RayTriangleIntersection rti = omBVH.getClosest(ray);
+                                if (!rti.valid)
+                                    isInside = false;
+                            }
                         }
                     }
-                }
-                if (isInside) {
-                    count++;
-                    float scaling = 1.0f;
-                    vec3 position = pos + ori*(scaling / sampleDistance); // TODO 
-                    initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, particleCountRB++, d_rigidBodies);
+                    if (isInside) {
+                        count++;
+                        voxel[z][y][x].first = 1;
+                    } else {
+                        voxel[z][y][x].first = 0;
+                    }
+                    // init border sdf
+                    voxel[z][y][x].second = {0,0,0};
+                    if (x == 0)
+                        voxel[z][y][x].second[0] = +1;
+                    else if (x == xDim-1)
+                        voxel[z][y][x].second[0] = -1;
+                    
+                    if (y == 0)
+                        voxel[z][y][x].second[1] = +1;
+                    else if (y == yDim-1)
+                        voxel[z][y][x].second[1] = -1;
+                    
+                    if (z == 0)
+                        voxel[z][y][x].second[2] = +1;
+                    else if (z == zDim-1)
+                        voxel[z][y][x].second[2] = -1;
                 }
             }
         }
+        // calc distance field
+        int i = 0;
+        int changed = 1;
+        while (changed) {
+            i++;
+            changed = 0;
+            for (int x = 1; x < xDim-1; x++) {
+                for (int y = 1; y < yDim-1; y++) {
+                    for (int z = 1; z < zDim-1; z++) {
+                        if (voxel[z][y][x].first == i) {
+                            if (    voxel[z+1][y][x].first < i
+                                ||  voxel[z-1][y][x].first < i
+                                ||  voxel[z][y+1][x].first < i
+                                ||  voxel[z][y-1][x].first < i
+                                ||  voxel[z][y][x+1].first < i
+                                ||  voxel[z][y][x-1].first < i)
+                                continue;
+                            voxel[z][y][x].first++;
+                            changed++;
+                        }
+                    }
+                }
+            }
+        }
+        // calc derivative (normal)
+        for (int x = 1; x < xDim-1; x++) {
+            for (int y = 1; y < yDim-1; y++) {
+                for (int z = 1; z < zDim-1; z++) {
+                    if (voxel[z][y][x].first) {
+                        float dz = voxel[z+1][y][x].first - voxel[z-1][y][x].first;
+                        float dy = voxel[z][y+1][x].first - voxel[z][y-1][x].first;
+                        float dx = voxel[z][y][x+1].first - voxel[z][y][x-1].first;
+                        voxel[z][y][x].second = {dx, dy, dz};
+                    }
+                }
+            }
+        }
+
+        for (int x = 0; x < xDim; x++) {
+            for (int y = 0; y < yDim; y++) {
+                for (int z = 0; z < zDim; z++) {
+                    vec3 ori = min + sampleDistance * vec3{x, y, z};
+                    if (voxel[z][y][x].first) {
+                        count++;
+                        float scaling = 1.0f;
+                        vec3 position = pos + ori*(scaling / sampleDistance);
+                        vec3 sdf = (float)voxel[z][y][x].first * normalize(voxel[z][y][x].second);
+                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies);
+                    }
+                }
+            }
+        }
+
+
+        for(int i = 0; i < zDim; ++i) {
+            for(int j = 0; j < yDim; ++j) {
+                delete [] voxel[i][j];
+            }
+            delete [] voxel[i];
+        }
+        delete [] voxel;
+
+    } else {
+        
+        for (float x = min.x(); x < max.x(); x += sampleDistance) {
+            for (float y = min.y(); y < max.y(); y += sampleDistance) {
+                for (float z = min.z(); z < max.z(); z += sampleDistance) {
+                    vec3 ori = {x,y,z};
+                    bool isInside = true;
+                    for (float dx = -1; dx < 2; dx += 2) {
+                        for (float dy = -1; dy < 2; dy += 2) {
+                            for (float dz = -1; dz < 2; dz += 2) {
+                                vec3 dir = {dx,dy,dz};
+                                Saiga::Ray ray(dir, ori);
+                                Saiga::Intersection::RayTriangleIntersection rti = omBVH.getClosest(ray);
+                                if (!rti.valid)
+                                    isInside = false;
+                            }
+                        }
+                    }
+                    if (isInside) {
+                        count++;
+                        float scaling = 1.0f;
+                        vec3 position = pos + ori*(scaling / sampleDistance); // TODO 
+                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, vec3{0.f,0.f,0.f}, color, particleCountRB++, d_rigidBodies);
+                    }
+                }
+            }
+        }
+
     }
+    return count;
+}
+
+// 4.4
+int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color) {    
+    vec3 min = {0,0,0};
+    int count = 0;
+    float sampleDistance = 1.0;
+
+        // 3d voxel grid
+        //vec3 size = bb.Size() / sampleDistance;
+        const int xDim = dim.x();
+        const int yDim = dim.y();
+        const int zDim = dim.z();
+
+        auto ***voxel = new std::pair<int, vec3>**[zDim];
+        for(int i = 0; i < zDim; ++i) {
+            voxel[i] = new std::pair<int, vec3>*[yDim];
+            for(int j = 0; j < yDim; ++j) {
+                voxel[i][j] = new std::pair<int, vec3>[xDim];
+            }
+        }
+        // init voxels
+        for (int x = 0; x < xDim; x++) {
+            for (int y = 0; y < yDim; y++) {
+                for (int z = 0; z < zDim; z++) {
+                    
+                    voxel[z][y][x].first = 1;
+
+                    // init border sdf
+                    voxel[z][y][x].second = {0,0,0};
+                    if (x == 0)
+                        voxel[z][y][x].second[0] = +1;
+                    else if (x == xDim-1)
+                        voxel[z][y][x].second[0] = -1;
+                    
+                    if (y == 0)
+                        voxel[z][y][x].second[1] = +1;
+                    else if (y == yDim-1)
+                        voxel[z][y][x].second[1] = -1;
+                    
+                    if (z == 0)
+                        voxel[z][y][x].second[2] = +1;
+                    else if (z == zDim-1)
+                        voxel[z][y][x].second[2] = -1;
+                }
+            }
+        }
+        // calc distance field
+        int i = 0;
+        int changed = 1;
+        while (changed) {
+            i++;
+            changed = 0;
+            for (int x = 1; x < xDim-1; x++) {
+                for (int y = 1; y < yDim-1; y++) {
+                    for (int z = 1; z < zDim-1; z++) {
+                        if (voxel[z][y][x].first == i) {
+                            if (    voxel[z+1][y][x].first < i
+                                ||  voxel[z-1][y][x].first < i
+                                ||  voxel[z][y+1][x].first < i
+                                ||  voxel[z][y-1][x].first < i
+                                ||  voxel[z][y][x+1].first < i
+                                ||  voxel[z][y][x-1].first < i)
+                                continue;
+                            voxel[z][y][x].first++;
+                            changed++;
+                        }
+                    }
+                }
+            }
+        }
+        // calc derivative (normal)
+        for (int x = 1; x < xDim-1; x++) {
+            for (int y = 1; y < yDim-1; y++) {
+                for (int z = 1; z < zDim-1; z++) {
+                    if (voxel[z][y][x].first) {
+                        float dz = voxel[z+1][y][x].first - voxel[z-1][y][x].first;
+                        float dy = voxel[z][y+1][x].first - voxel[z][y-1][x].first;
+                        float dx = voxel[z][y][x+1].first - voxel[z][y][x-1].first;
+                        voxel[z][y][x].second = {dx, dy, dz};
+                    }
+                }
+            }
+        }
+
+        for (int x = 0; x < xDim; x++) {
+            for (int y = 0; y < yDim; y++) {
+                for (int z = 0; z < zDim; z++) {
+                    vec3 ori = min + sampleDistance * vec3{x, y, z};
+                    if (voxel[z][y][x].first) {
+                        count++;
+                        float scaling = 1.0f;
+                        vec3 position = pos + ori*(scaling / sampleDistance);
+                        vec3 sdf = (float)voxel[z][y][x].first * normalize(voxel[z][y][x].second);
+                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies);
+                    }
+                }
+            }
+        }
+
+
+        for(int i = 0; i < zDim; ++i) {
+            for(int j = 0; j < yDim; ++j) {
+                delete [] voxel[i][j];
+            }
+            delete [] voxel[i];
+        }
+        delete [] voxel;
+
     return count;
 }
 
@@ -282,18 +565,37 @@ __global__ void resetRigidBody(RigidBody *rigidBodies, int rigidBodyCount) {
     rb.A = mat3::Zero().cast<float>();
 }
 
+__global__ void resetRigidBodyComplete(RigidBody *rigidBodies, int maxRigidBodyCount) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id >= maxRigidBodyCount)
+        return;
+    RigidBody &rb = rigidBodies[ti.thread_id];
+    // reset
+    rb.particleCount = 0;
+    rb.originOfMass = {0,0,0};
+    rb.A = mat3::Zero().cast<float>();
+}
+
 void ParticleSystem::constraintsShapeMatchingRB() {
+    updateRigidBodies();
+
+    resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies);
+    CUDA_SYNC_CHECK_ERROR();    
+}
+
+void ParticleSystem::updateRigidBodies() {
+    const unsigned int BLOCKS_RB = Saiga::CUDA::getBlockCount(rigidBodyCount, BLOCK_SIZE);
+
+    resetRigidBody<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
+    CUDA_SYNC_CHECK_ERROR();
+
     caclulateRigidBodyOriginOfMass<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies);
     CUDA_SYNC_CHECK_ERROR();
     covariance<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies);
     CUDA_SYNC_CHECK_ERROR();
-    const unsigned int BLOCKS_RB = Saiga::CUDA::getBlockCount(rigidBodyCount, BLOCK_SIZE);
     SVD<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
-    resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies);
-    CUDA_SYNC_CHECK_ERROR();
-    resetRigidBody<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
-    CUDA_SYNC_CHECK_ERROR();
+    
 }
 
 // TODO sehr haesslich
@@ -309,34 +611,81 @@ __global__ void deactivateNonRB(Saiga::ArrayView<Particle> particles) {
     }
 }
 
-void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul) {
+void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario) {
     resetParticles<<<BLOCKS, BLOCK_SIZE>>>(x, z, corner, distance, d_particles, randInitMul);
     CUDA_SYNC_CHECK_ERROR();
 
-    initRigidBodies(distance);
+    particleCountRB = 0;
+    rigidBodyCount = 0;
+    const unsigned int BLOCKS_RB = Saiga::CUDA::getBlockCount(maxRigidBodyCount, BLOCK_SIZE);
+    resetRigidBodyComplete<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, maxRigidBodyCount);
+
+    if (scenario > 2)
+        initRigidBodies(distance, scenario);
 }
 
 // 4.0
-void ParticleSystem::initRigidBodies(float distance) {
+void ParticleSystem::initRigidBodies(float distance, int scenario) {
     
     particleCountRB = 0;
     rigidBodyCount = 0;
 
-    vec3 pos = linearRand(vec3(-50, 30, -50), vec3(50, 60, 50));
-    vec3 rot = linearRand(vec3(0, 0, 0), vec3(M_PI_2, M_PI_2, M_PI_2));
-    int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot);
-    particleCountRB += objParticleCount;
-    printf("%i\n", objParticleCount);
+    // spawn
+    ivec3 dim;
+    vec3 pos;
+    vec3 rot;
+    vec4 color;
+    int objParticleCount;
 
-    for (int i = 0; i < 20; i++) {
-        ivec3 dim = linearRand(ivec3(3,3,3), ivec3(10,10,10));
-        vec3 pos = linearRand(vec3(-50, 30, -50), vec3(50, 60, 50));
-        vec3 rot = linearRand(vec3(0, 0, 0), vec3(M_PI_2, M_PI_2, M_PI_2));
-        initCuboidParticles<<<1, 32>>>(d_particles, rigidBodyCount++, pos, dim, rot, particleCountRB, d_rigidBodies);
-        CUDA_SYNC_CHECK_ERROR();
-        particleCountRB += dim.x() * dim.y() * dim.z();
+    if (scenario != 3 && scenario != 5) {
+        color = {.6, .5, .5, 1};
+
+        pos = linearRand(vec3(-40, 20, -40), vec3(40, 30, 40));
+        rot = {0,0,0};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, color);
+        particleCountRB += objParticleCount;
+        printf("%i\n", objParticleCount);
+
+        pos = {0, 70, 0};
+        rot = {0,0,0};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, color);
+        particleCountRB += objParticleCount;
     }
-    deactivateNonRB<<<BLOCKS, BLOCK_SIZE>>>(d_particles);
+
+    color = {.1, .1, .8, 1};
+
+    if (scenario == 5) {
+        rot = {0,0,0};
+        dim = {5,5,5};
+
+        pos = {0, 30, 0};
+        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color);
+        particleCountRB += dim.x() * dim.y() * dim.z();
+
+        pos = {0, 20, 0};
+        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color);
+        particleCountRB += dim.x() * dim.y() * dim.z();
+
+        pos = {0, 10, 0};
+        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color);
+        particleCountRB += dim.x() * dim.y() * dim.z();
+
+    } else {
+
+        for (int i = 0; i < 20; i++) {
+            ivec3 dim = linearRand(ivec3(3,3,3), ivec3(5,5,5));
+            vec3 pos = linearRand(vec3(-30, 10, -30), vec3(30, 40, 30));
+            vec3 rot = linearRand(vec3(0, 0, 0), vec3(M_PI_2, M_PI_2, M_PI_2));
+            //initCuboidParticles<<<1, 32>>>(d_particles, rigidBodyCount++, pos, dim, rot, color, particleCountRB, d_rigidBodies);
+            //CUDA_SYNC_CHECK_ERROR();
+            objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color);
+            particleCountRB += dim.x() * dim.y() * dim.z();
+        }
+
+    }
+
+    if (scenario > 2 && scenario != 6)
+        deactivateNonRB<<<BLOCKS, BLOCK_SIZE>>>(d_particles);
     CUDA_SYNC_CHECK_ERROR();
     // TODO
     resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
@@ -633,6 +982,92 @@ __global__ void solverPBDParticles(Saiga::ArrayView<Particle> particles, int *co
 
     float d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
+    float m = (m1 / (m1 + m2));
+    vec3 dx1 = m * d * n; //resolvePBD(pa_copy, pb_copy);
+    vec3 dx2 = - (1 - m) * d * n;
+    // jacobi integration mode: set predicted directly without using d_predicted and apply relax here to dx1
+    if (jacobi) {
+        atomicAdd(&pa.d_predicted[0], dx1[0]);
+        atomicAdd(&pa.d_predicted[1], dx1[1]);
+        atomicAdd(&pa.d_predicted[2], dx1[2]);
+
+        atomicAdd(&pb.d_predicted[0], dx2[0]);
+        atomicAdd(&pb.d_predicted[1], dx2[1]);
+        atomicAdd(&pb.d_predicted[2], dx2[2]);
+    } else { // Gauss-Seidel (race conditions)
+        dx1 *= relaxP;
+        dx2 *= relaxP;
+
+        atomicAdd(&pa.predicted[0], dx1[0]);
+        atomicAdd(&pa.predicted[1], dx1[1]);
+        atomicAdd(&pa.predicted[2], dx1[2]);
+        
+        atomicAdd(&pb.predicted[0], dx2[0]);
+        atomicAdd(&pb.predicted[1], dx2[1]);
+        atomicAdd(&pb.predicted[2], dx2[2]);
+    }
+}
+
+__global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int *constraints, int *constraintCounter, int maxConstraintNum, float relaxP, bool jacobi, RigidBody *rigidBodies) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id >= *constraintCounter || ti.thread_id >= maxConstraintNum)
+        return;
+    int idxA = constraints[ti.thread_id*2 + 0];
+    int idxB = constraints[ti.thread_id*2 + 1];
+    Particle &pa = particles[idxA];
+    Particle &pb = particles[idxB];
+
+
+    ParticleCalc pa_copy;
+    Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[idxA]), &pa_copy);
+    ParticleCalc pb_copy;
+    Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[idxB]), &pb_copy);
+
+    float m1 = pa.massinv;
+    float m2 = pb.massinv;
+
+    float d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted);
+    vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
+    
+    if (pa.rbID != -1 || pb.rbID != -1) {
+        vec3 sdf1 = pa.sdf;
+        vec3 sdf2 = pb.sdf;
+        mat3 R;
+        if (pa.rbID != -1 && pb.rbID != -1) {
+            Particle pi;
+            Particle pj;
+            if (sdf1.norm() <= sdf2.norm()) {
+                d = sdf1.norm();
+                n = normalize(sdf1);
+                R = rigidBodies[pa.rbID].A;
+            } else {
+                d = sdf2.norm();
+                n = -normalize(sdf2);
+                R = rigidBodies[pb.rbID].A;
+            }
+        } else if (pa.rbID != -1) {
+            d = sdf1.norm();
+            n = normalize(sdf1);
+            R = rigidBodies[pa.rbID].A;
+        } else if (pb.rbID != -1) {
+            d = sdf2.norm();
+            n = -normalize(sdf2);
+            R = rigidBodies[pb.rbID].A;
+        }
+        n = R * -n;
+        if (d <= 1.0) {
+            // border particle
+            d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted);
+            vec3 xij = -(pa_copy.predicted - pb_copy.predicted).normalized();
+            if (xij.dot(n) < 0.f) {
+                n = xij - 2*(xij.dot(n))*n;
+            } else {
+                n = xij;
+            }
+        }
+        n = -n;
+    }
+
     float m = (m1 / (m1 + m2));
     vec3 dx1 = m * d * n; //resolvePBD(pa_copy, pb_copy);
     vec3 dx2 = - (1 - m) * d * n;
@@ -977,20 +1412,20 @@ void ParticleSystem::update(float dt) {
         updateParticlesPBD2<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, relaxP);
         //CUDA_SYNC_CHECK_ERROR();
     } else if (physicsMode == 5) { // 4.0 Rigid Body
-        resetConstraintCounter<<<1, 32, 0, stream1>>>(d_constraintCounter, d_constraintCounterWalls);
-        //resetConstraints<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE, 0, stream1>>>(d_constraintList, maxConstraintNum, d_constraintCounter, d_constraintCounterWalls);
+        resetConstraintCounter<<<1, 32>>>(d_constraintCounter, d_constraintCounterWalls);
+        //resetConstraints<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_constraintList, maxConstraintNum, d_constraintCounter, d_constraintCounterWalls);
         //CUDA_SYNC_CHECK_ERROR();
 
         const unsigned int BLOCKS_CELLS = Saiga::CUDA::getBlockCount(cellCount, BLOCK_SIZE);
-        reset_cell_list<<<BLOCKS_CELLS, BLOCK_SIZE, 0, stream2>>>(d_cell_list, cellCount);
+        reset_cell_list<<<BLOCKS_CELLS, BLOCK_SIZE>>>(d_cell_list, cellCount);
         //CUDA_SYNC_CHECK_ERROR();
-        createLinkedCells<<<BLOCKS, BLOCK_SIZE, 0, stream2>>>(d_particles, d_cell_list, d_particle_list, cellDim, cellCount, cellSize, hashFunction);
+        createLinkedCells<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, cellDim, cellCount, cellSize, hashFunction);
         //CUDA_SYNC_CHECK_ERROR();
 
     // 4.0 einziger unterschied
-        createConstraintParticlesLinkedCellsRigidBodies<<<BLOCKS, BLOCK_SIZE, 0, stream2>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, hashFunction);
+        createConstraintParticlesLinkedCellsRigidBodies<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, hashFunction);
 
-        createConstraintWalls<<<BLOCKS, BLOCK_SIZE, 0, stream1>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls);
+        createConstraintWalls<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls);
         CUDA_SYNC_CHECK_ERROR();
 
         updateParticlesPBD1<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, dampV);
@@ -1010,8 +1445,13 @@ void ParticleSystem::update(float dt) {
                 calculatedRelaxP = 1 - pow(1 - calculatedRelaxP, 1.0/(i+1));
             }
             // TODO N -> maxConstraintNum
-            solverPBDParticles<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE, 0, stream1>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi);
-            solverPBDWalls<<<Saiga::CUDA::getBlockCount(maxConstraintNumWalls, BLOCK_SIZE), BLOCK_SIZE, 0, stream2>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, relaxP, jacobi);
+            if (useSDF) {
+                updateRigidBodies();
+                solverPBDParticlesSDF<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi, d_rigidBodies);
+            } else {
+                solverPBDParticles<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi);
+            }
+            solverPBDWalls<<<Saiga::CUDA::getBlockCount(maxConstraintNumWalls, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, relaxP, jacobi);
             CUDA_SYNC_CHECK_ERROR();
 
             updateParticlesPBD2Iterator<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, calculatedRelaxP);

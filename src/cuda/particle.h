@@ -24,6 +24,9 @@ struct SAIGA_ALIGN(16) Particle
     // 4.0
     int rbID;
     vec3 relative;
+
+    // 4.4
+    vec3 sdf;
 };
 
 struct SAIGA_ALIGN(16) ParticleCalc

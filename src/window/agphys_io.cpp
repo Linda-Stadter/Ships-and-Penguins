@@ -17,6 +17,7 @@ void Agphys::renderGUI()
     ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Agphys")) {
 
+
         ImGui::InputInt("particleCount", &numberParticles, 0, 10000);
         ImGui::InputFloat("distance", &distance, 0.01, 0.1);
         ImGui::InputInt("xCount", &xCount);
@@ -25,9 +26,11 @@ void Agphys::renderGUI()
         ImGui::InputFloat3("boxDim", &boxDim[0]);
         ImGui::InputFloat("rand", &randInitMul);
 
+        ImGui::Combo("scenario", &scenario, scenarios, std::size(scenarios));
         if (ImGui::Button("Create Particle System"))
         {
             destroyParticles();
+            loadScenario();
             initParticles();
             initWalls();
         }

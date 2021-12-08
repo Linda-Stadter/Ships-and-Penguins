@@ -35,6 +35,8 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
 
     void initWalls();
 
+    void loadScenario();
+
     // Deferred rendering and update functions (called from Saiga)
     void update(float dt) override;
     void updateSingleStep(float dt);
@@ -50,23 +52,15 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     unsigned int steps = 0;
 
     // Particles
-    //#define SMALL
-    #ifdef SMALL
     int numberParticles = 10000;
     float distance = 0.99;
     int xCount = 20;
     int zCount = 20;
     vec3 corner = {-10, 15, -10};
     vec3 boxDim = {40, 40, 40};
-    #endif
-    #ifndef SMALL
-    int numberParticles = 1000000;
-    float distance = 0.99;
-    int xCount = 200;
-    int zCount = 200;
-    vec3 corner = {-100, -1, -100};
-    vec3 boxDim = {200, 100, 200};
-    #endif
+
+    const char* scenarios[7] = {"N Particles", "10K Particles", "1M Particles", "Rigid Bodies (Cuboids)", "Rigid Bodies (Cuboids + Teapod)", "Rigid Bodies (SDF demo)", "Particles + Rigid Bodies (Cuboids + Teapod)"};
+    int scenario = 6;
 
 
     float randInitMul = 0.001;
