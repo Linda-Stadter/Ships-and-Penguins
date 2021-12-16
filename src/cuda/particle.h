@@ -16,7 +16,6 @@ struct SAIGA_ALIGN(16) Particle
 
     vec3 position;
     vec3 d_predicted;
-    vec3 momentum;
     vec3 d_momentum;
     vec3 velocity;
     float massinv;
@@ -27,6 +26,10 @@ struct SAIGA_ALIGN(16) Particle
 
     // 4.4
     vec3 sdf;
+
+    // 6
+    float lambda;
+    vec3 curl;
 };
 
 struct SAIGA_ALIGN(16) ParticleCalc

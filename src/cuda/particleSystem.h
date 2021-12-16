@@ -9,6 +9,8 @@
 
 #include "particle.h"
 
+#include <utility>
+
 using Saiga::ArrayView;
 using Saiga::CUDA::getBlockCount;
 
@@ -25,6 +27,8 @@ class SAIGA_ALIGN(16) ParticleSystem
     ArrayView<Particle> d_particles;
     ArrayView<Saiga::Plane> d_walls;
 
+    float particleRenderRadius = 0.5;
+    
     int particleCountRB = 0;
     int maxRigidBodyCount = 50;
     int rigidBodyCount = 0;
@@ -56,13 +60,21 @@ class SAIGA_ALIGN(16) ParticleSystem
     int solverIterations = 2;
     bool useCalculatedRelaxP = true;
 
+    float h = 1.0;
+    float epsilon_spiky = 0.001;
+    float omega_lambda_relax = 200;
+    float c_viscosity = 0.01;
+    float epsilon_vorticity = 0.01;
+
+    float particleRadiusRestDensity = 0.25;
+
     float lastDt = 0;
 
     int *d_rayHitCount;
 
     // GUI
-    const char* physics[6] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based", "Force Based + Linked Cell", "3.0 Position Based + Linked Cell", "4.0 Rigid Body"};
-    int physicsMode = 5;
+    const char* physics[7] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based", "Force Based + Linked Cell", "3.0 Position Based + Linked Cell", "4.0 Rigid Body", "5.0 Fluid"};
+    int physicsMode = 6;
     const char* actions[7] = {"Color", "Impulse", "Explode", "Implode", "Split", "Inflate", "Deflate"};
     int actionMode = 0;
 
@@ -81,7 +93,10 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     float maxParticleRadius = 0.5;
     float cellSize;
-    int* d_particle_list, * d_cell_list;
+    int* d_particle_list;
+    std::pair<int, int>* d_cell_list;
+    int* d_particle_hash;
+
 
     // 4.4
     bool useSDF = true;

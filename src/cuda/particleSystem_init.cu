@@ -25,7 +25,8 @@ ParticleSystem::ParticleSystem(int _particleCount, vec3 _boxMin, vec3 _boxDim)
     cellCount = cellDim[0] * cellDim[1] * cellDim[2];
 
     checkError(cudaMalloc((void**)&d_particle_list, sizeof(int) * particleCount));
-	checkError(cudaMalloc((void**)&d_cell_list, sizeof(int) * cellCount));
+	checkError(cudaMalloc((void**)&d_cell_list, sizeof(std::pair<int, int>) * cellCount));
+	checkError(cudaMalloc((void**)&d_particle_hash, sizeof(int) * particleCount));
 
     std::cout << "ParticleSystem initialized!" << std::endl;
     CUDA_SYNC_CHECK_ERROR();
