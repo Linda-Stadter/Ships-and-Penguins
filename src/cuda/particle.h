@@ -17,19 +17,21 @@ struct SAIGA_ALIGN(16) Particle
     vec3 position;
     vec3 d_predicted;
     vec3 d_momentum;
-    vec3 velocity;
+    vec3 velocity; // used for both velocity and momentum
     float massinv;
+
+    bool fixed;
 
     // 4.0
     int rbID;
     vec3 relative;
 
     // 4.4
-    vec3 sdf;
+    vec3 sdf; // used for both sdf and curl
 
     // 6
     float lambda;
-    vec3 curl;
+    //vec3 curl;
 };
 
 struct SAIGA_ALIGN(16) ParticleCalc
@@ -42,5 +44,5 @@ struct SAIGA_ALIGN(16) RigidBody
 {
     int particleCount;
     vec3 originOfMass;
-    mat3 A;
+    mat3 A; // used for both A and later result Q
 };

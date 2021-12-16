@@ -89,12 +89,12 @@ void Agphys::loadScenario()
         corner = {-100, 0.5, -100};
         boxDim = {200, 100, 200};
     } else if (scenario == 7) {
-        numberParticles = 100000;
-        distance = 1;
-        xCount = 40;
-        zCount = 40;
-        corner = {-40, 0, -20};
-        boxDim = {80, 100, 40};
+        numberParticles = 2000 * 4 * 4 * 4;
+        distance = 0.5;
+        xCount = 10 * 4;
+        zCount = 20 * 4;
+        corner = {-30*2, 0, -10*2};
+        boxDim = {60*2, 80*2, 20*2};
     } else if (scenario == 8) {
         numberParticles = 2000 * 4 * 4 * 4;
         distance = 0.5;
@@ -103,12 +103,12 @@ void Agphys::loadScenario()
         corner = {-30*2, 0, -10*2};
         boxDim = {60*2, 80*2, 20*2};
     } else if (scenario == 9) {
-        numberParticles = 100000;
+        numberParticles = 20*20*20+40*40*40;
         distance = 0.5;
-        xCount = 40;
-        zCount = 40;
-        corner = {-40, 0, -20};
-        boxDim = {80, 100, 40};
+        xCount = 20;
+        zCount = 20;
+        corner = {-20, 0, -20};
+        boxDim = {40, 80, 40};
     } else {
         numberParticles = 100000;
         distance = 0.99;
