@@ -29,6 +29,11 @@ void ParticleSystem::renderGUI()
         ImGui::InputFloat("h", &h);
         ImGui::InputFloat("epsilon_spiky", &epsilon_spiky);
         ImGui::InputFloat("omega_lambda_relax", &omega_lambda_relax);
+
+        ImGui::InputFloat("artificial_pressure_k", &artificial_pressure_k);
+        ImGui::InputInt("artificial_pressure_n", &artificial_pressure_n);
+        ImGui::InputFloat("delta_q", &delta_q);
+
         ImGui::InputFloat("c_viscosity", &c_viscosity);
         ImGui::InputFloat("epsilon_vorticity", &epsilon_vorticity);
 

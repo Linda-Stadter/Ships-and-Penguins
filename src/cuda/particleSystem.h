@@ -63,6 +63,11 @@ class SAIGA_ALIGN(16) ParticleSystem
     float h = 1.0;
     float epsilon_spiky = 0.001;
     float omega_lambda_relax = 200;
+
+    float artificial_pressure_k = 0.1;
+    int artificial_pressure_n = 4;
+    float delta_q = 0.2; // 0.1 - 0.3
+
     float c_viscosity = 0.01;
     float epsilon_vorticity = 0.01;
 
