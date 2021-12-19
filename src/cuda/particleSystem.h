@@ -39,7 +39,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     void updateRigidBodies();
 
     int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color);
-    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color);
+    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed);
 
     int *d_constraintCounter;
     int *d_constraintList;
