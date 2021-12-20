@@ -1685,7 +1685,7 @@ __global__ void updateParticlesPBD2IteratorFluid(Saiga::ArrayView<Particle> part
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         int rbIDb = particles[neighbor_particle_idx].rbID;
                         if (rbIDb != -2)
-                            return;
+                            continue;
                         //Particle pb = particles[neighbor_particle_idx];
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
                         // Exclude current particle (r = 0) from force calculation
@@ -1756,7 +1756,7 @@ __global__ void computeVorticityAndViscosity(float dt, Saiga::ArrayView<Particle
                         //if (!(x == 0 && y == 0 && z == 0) || neighbor_particle_idx > ti.thread_id) {
                         int rbIDb = pb.rbID;
                         if (rbIDb != -2)
-                            return;
+                            continue;
                             //float d0 = collideSphereSphere(h, 0, pa.predicted, pb.predicted);
                             //if (d0 > 0) {
                                 // 6 f 1
@@ -1825,7 +1825,7 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
                         //if (!(x == 0 && y == 0 && z == 0) || neighbor_particle_idx > ti.thread_id) {
                         int rbIDb = pb.rbID;
                         if (rbIDb != -2)
-                            return;
+                            continue;
                             //float d0 = collideSphereSphere(h, 0, pa.predicted, pb.predicted);
                             //if (d0 > 0) {
                                 // 6 f
