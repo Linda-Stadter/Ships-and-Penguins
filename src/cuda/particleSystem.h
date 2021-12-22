@@ -14,6 +14,19 @@
 using Saiga::ArrayView;
 using Saiga::CUDA::getBlockCount;
 
+struct ClothConstraint {
+    int first;
+    int second;
+    float dist;
+};
+
+struct ClothBendingConstraint {
+    int id1;
+    int id2;
+    int id3;
+    int id4;
+};
+
 class SAIGA_ALIGN(16) ParticleSystem
 {
    public:
@@ -28,6 +41,8 @@ class SAIGA_ALIGN(16) ParticleSystem
     ArrayView<Saiga::Plane> d_walls;
 
     float particleRenderRadius = 0.5;
+    float particleRadiusWater = 0.5;
+    float particleRadiusCloth = 0.5;
     
     int particleCountRB = 0;
     int maxRigidBodyCount = 50;
@@ -39,7 +54,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     void updateRigidBodies();
 
     int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color);
-    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed);
+    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass);
 
     int *d_constraintCounter;
     int *d_constraintList;
@@ -48,6 +63,16 @@ class SAIGA_ALIGN(16) ParticleSystem
     int *d_constraintCounterWalls;
     int *d_constraintListWalls;
     int maxConstraintNumWalls = particleCount * 4;
+
+    int *d_constraintCounterCloth;
+    ClothConstraint *d_constraintListCloth;
+    int maxConstraintNumCloth = particleCount * 4;
+
+    int *d_constraintCounterClothBending;
+    ClothBendingConstraint *d_constraintListClothBending;
+    int maxConstraintNumClothBending = particleCount * 4;
+
+    int *d_particleIdLookup;
 
     vec3 gravity = {0, -9.81, 0};
     float elast_const = 0.2;
@@ -59,6 +84,9 @@ class SAIGA_ALIGN(16) ParticleSystem
     float relaxP = 0.25;
     int solverIterations = 2;
     bool useCalculatedRelaxP = true;
+
+    bool testBool = true;
+    float testFloat = 0.05;
 
     float h = 1.0;
     float epsilon_spiky = 0.001;
@@ -78,7 +106,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     int *d_rayHitCount;
 
     // GUI
-    const char* physics[7] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based", "Force Based + Linked Cell", "3.0 Position Based + Linked Cell", "4.0 Rigid Body", "5.0 Fluid"};
+    const char* physics[8] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based", "Force Based + Linked Cell", "3.0 Position Based + Linked Cell", "4.0 Rigid Body", "5.0 Fluid", "Cloth"};
     int physicsMode = 6;
     const char* actions[7] = {"Color", "Impulse", "Explode", "Implode", "Split", "Inflate", "Deflate"};
     int actionMode = 0;

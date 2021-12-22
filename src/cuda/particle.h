@@ -39,6 +39,8 @@ struct SAIGA_ALIGN(16) Particle
     // 6
     //float lambda;
     //vec3 curl;
+
+    int id; // cloth
 };
 
 struct SAIGA_ALIGN(16) ParticleCalc

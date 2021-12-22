@@ -26,6 +26,13 @@ void ParticleSystem::renderGUI()
         ImGui::InputFloat("damp", &dampV);
         ImGui::Checkbox("Jacobi Solver (or Gauss-Seidel)", &jacobi);
 
+        ImGui::InputFloat("particleRadiusRestDensity", &particleRadiusRestDensity);
+        ImGui::InputFloat("particleRadiusWater", &particleRadiusWater);
+        ImGui::InputFloat("particleRadiusCloth", &particleRadiusCloth);
+
+        ImGui::Checkbox("test bool", &testBool);
+        ImGui::InputFloat("test float", &testFloat);
+
         ImGui::InputFloat("h", &h);
         ImGui::InputFloat("epsilon_spiky", &epsilon_spiky);
         ImGui::InputFloat("omega_lambda_relax", &omega_lambda_relax);
