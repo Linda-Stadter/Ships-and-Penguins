@@ -32,8 +32,6 @@ __global__ void updateParticles(float dt, vec3 gravity, Saiga::ArrayView<Particl
     Particle &p = particles[ti.thread_id];
 
     if (!p.fixed) {
-
-        // TODO refactor momentum replaced by velocity
         p.velocity += p.d_momentum;
         p.position += dt * p.velocity * p.massinv;
         p.velocity += dt * gravity / p.massinv;
@@ -44,7 +42,6 @@ __global__ void updateParticles(float dt, vec3 gravity, Saiga::ArrayView<Particl
     // for compatibility of constraint list in 2.1
     p.predicted = p.position;
     // transition between physics
-    // TODO refactor momentum replaced by velocity
 }
 
 __global__ void updateParticlesPBD1(float dt, vec3 gravity, Saiga::ArrayView<Particle>particles, float dampV) {
@@ -112,12 +109,6 @@ __global__ void updateParticlesPBD2(float dt, Saiga::ArrayView<Particle>particle
     // reset
     p.d_predicted = {0, 0, 0};
 
-    // velocity Update? hier? in eigenem kernel?
-    // TODO friction restitution
-
-    // transition between physics
-    // TODO refactor momentum replaced by velocity
-
     // 6.2
     p.lambda = 0;
 }
@@ -132,13 +123,11 @@ __global__ void resetParticles(int x, int z, vec3 corner, float distance, Saiga:
     int zPos = ((ti.thread_id - xPos) / x) % z;
     int yPos = (((ti.thread_id - xPos) / x) - zPos) / z;
     vec3 pos = {xPos, yPos, zPos};
-    //printf("%i, %i, %i; ", xPos, zPos, yPos);
 
     // pseudo random position offset
     int rand = ti.thread_id + p.position[0];
     p.position = corner + pos * distance + vec3{rand % 11, rand % 17, rand % 13} * randInitMul;
 
-    // TODO refactor momentum replaced by velocity
     p.velocity = {0, 0, 0};
     p.massinv = 1.0/1.0;
     p.predicted = p.position;
@@ -173,13 +162,11 @@ __global__ void initParticles(int startIdx, int count, int x, int z, vec3 corner
     int zPos = ((idx - xPos) / x) % z;
     int yPos = (((idx - xPos) / x) - zPos) / z;
     vec3 pos = {xPos, yPos, zPos};
-    //printf("%i, %i, %i; ", xPos, zPos, yPos);
 
     // pseudo random position offset
     int rand = ti.thread_id + p.position[0];
     p.position = corner + pos * distance + vec3{rand % 11, rand % 17, rand % 13} * randInitMul;
 
-    // TODO refactor momentum replaced by velocity
     p.velocity = {0, 0, 0};
     p.massinv = 1.0f/mass;
     p.predicted = p.position;
@@ -305,7 +292,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
     Saiga::UnifiedMesh mesh = model.CombinedMesh().first;
     std::vector<Triangle> triangles = mesh.TriangleSoup();
     // 1
-    Saiga::AABB bb = mesh.BoundingBox(); // TODO model.BoundingBox() ?
+    Saiga::AABB bb = model.BoundingBox(); // mesh. or model.BoundingBox()
     vec3 min = bb.min;
     vec3 max = bb.max;
     // 2
@@ -335,7 +322,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
         for (int x = 0; x < xDim; x++) {
             for (int y = 0; y < yDim; y++) {
                 for (int z = 0; z < zDim; z++) {
-                    vec3 ori = min + sampleDistance * vec3{(float)x, (float)y, (float)z}; // TODO cast
+                    vec3 ori = min + sampleDistance * ivec3{x, y, z}.cast<float>();
                     bool isInside = true;
                     for (float dx = -1; dx < 2; dx += 2) {
                         for (float dy = -1; dy < 2; dy += 2) {
@@ -414,7 +401,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
         for (int x = 0; x < xDim; x++) {
             for (int y = 0; y < yDim; y++) {
                 for (int z = 0; z < zDim; z++) {
-                    vec3 ori = min + sampleDistance * vec3{(float)x, (float)y, (float)z}; // TODO cast
+                    vec3 ori = min + sampleDistance * ivec3{x, y, z}.cast<float>();
                     if (voxel[z][y][x].first) {
                         count++;
                         float scaling = 1.0f;
@@ -456,7 +443,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
                     if (isInside) {
                         count++;
                         float scaling = 1.0f;
-                        vec3 position = pos + ori*(scaling / sampleDistance); // TODO 
+                        vec3 position = pos + ori * (scaling / sampleDistance);
                         initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, vec3{0.f,0.f,0.f}, color, particleCountRB++, d_rigidBodies);
                     }
                 }
@@ -553,7 +540,7 @@ int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, 
         for (int x = 0; x < xDim; x++) {
             for (int y = 0; y < yDim; y++) {
                 for (int z = 0; z < zDim; z++) {
-                    vec3 ori = min + sampleDistance * vec3{(float)x, (float)y, (float)z}; // TODO cast
+                    vec3 ori = min + sampleDistance * ivec3{x, y, z}.cast<float>();
                     if (voxel[z][y][x].first) {
                         count++;
                         float scaling = 1.0f;
@@ -583,7 +570,7 @@ __global__ void caclulateRigidBodyOriginOfMass(Saiga::ArrayView<Particle> partic
         return;
     Particle &p = particles[ti.thread_id];
     if (p.rbID >= 0) {
-        vec3 d_originOfMass = p.predicted / (float)rigidBodies[p.rbID].particleCount; // TODO position vs predicted
+        vec3 d_originOfMass = p.predicted / (float)rigidBodies[p.rbID].particleCount;
         atomicAdd(&rigidBodies[p.rbID].originOfMass[0], d_originOfMass[0]);
         atomicAdd(&rigidBodies[p.rbID].originOfMass[1], d_originOfMass[1]);
         atomicAdd(&rigidBodies[p.rbID].originOfMass[2], d_originOfMass[2]);
@@ -597,9 +584,7 @@ __global__ void covariance(Saiga::ArrayView<Particle> particles, int particleCou
     Particle &p = particles[ti.thread_id];
     if (p.rbID >= 0) {
         //vec3 pc = p.position - rigidBodies[p.rbID].originOfMass;
-        mat3 pcr = (p.predicted - rigidBodies[p.rbID].originOfMass) * p.relative.transpose(); // TODO position vs predicted
-
-        //printf("%i, %f, %f, %f\n", p.rbID, rigidBodies[p.rbID].originOfMass[0], rigidBodies[p.rbID].originOfMass[1], rigidBodies[p.rbID].originOfMass[2]);
+        mat3 pcr = (p.predicted - rigidBodies[p.rbID].originOfMass) * p.relative.transpose();
 
         atomicAdd(&rigidBodies[p.rbID].A(0,0), pcr(0,0));
         atomicAdd(&rigidBodies[p.rbID].A(0,1), pcr(0,1));
@@ -612,19 +597,13 @@ __global__ void covariance(Saiga::ArrayView<Particle> particles, int particleCou
         atomicAdd(&rigidBodies[p.rbID].A(2,2), pcr(2,2));
     }
 }
-// TODO test if random atomicAdd order is faster
 
-// TODO rename A to AQ used for both
 __global__ void SVD(RigidBody *rigidBodies, int rigidBodyCount) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= rigidBodyCount)
         return;
     RigidBody &rb = rigidBodies[ti.thread_id];
     rb.A = svd3_cuda::pd(rb.A);
-
-    // reset
-    //if (ti.thread_id == 0)
-        //printf("%i: %f, %f, %f\n", ti.thread_id, rb.originOfMass[0], rb.originOfMass[1], rb.originOfMass[2]);
 }
 
 __global__ void resolveRigidBodyConstraints(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies) {
@@ -634,9 +613,7 @@ __global__ void resolveRigidBodyConstraints(Saiga::ArrayView<Particle> particles
     Particle &p = particles[ti.thread_id];
     if (p.rbID >= 0) {
         // dx = (Q*r + c) - p
-        //if (ti.thread_id == 0)
-            //printf("%f, %f, %f, %f, %f, %f, %f, %f, %f\n", p.relative[0], p.relative[1], p.relative[2], rigidBodies[p.rbID].A(0,0), rigidBodies[p.rbID].A(0,1), rigidBodies[p.rbID].A(1,1), rigidBodies[p.rbID].originOfMass[0], rigidBodies[p.rbID].originOfMass[1], rigidBodies[p.rbID].originOfMass[2]);
-        p.predicted += (rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass) - p.predicted; // TODO position vs predicted
+        p.predicted += (rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass) - p.predicted;
     }
 }
 
@@ -683,7 +660,7 @@ void ParticleSystem::updateRigidBodies() {
     
 }
 
-// TODO sehr haesslich
+// sehr haesslich
 __global__ void deactivateNonRB(Saiga::ArrayView<Particle> particles) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particles.size())
@@ -791,7 +768,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     if (scenario > 2 && scenario != 6 && scenario != 7 && scenario < 7)
         deactivateNonRB<<<BLOCKS, BLOCK_SIZE>>>(d_particles);
     CUDA_SYNC_CHECK_ERROR();
-    // TODO
+    
     resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
 
@@ -899,7 +876,6 @@ inline __device__ vec3 frictionCollision(vec3 p1, vec3 p2, vec3 n1, float mu) {
 
 // plane particle
 __device__ void resolveCollision(Particle &particle, Saiga::Plane &plane, float d0, float dt, float elast_const, float spring_const, float frict_const) {
-    // TODO refactor momentum replaced by velocity
     bool alive = particle.velocity.dot(plane.normal) * particle.massinv < 0;
     vec3 dp1e = {0, 0, 0};
     if (alive)
@@ -914,7 +890,6 @@ __device__ void resolveCollision(Particle &particle, Saiga::Plane &plane, float 
 
 // particle particle
 __device__ vec3 resolveCollision(Particle &particleA, Particle &particleB, float d0, float dt, float elast_const, float spring_const, float frict_const) {
-    // TODO refactor momentum replaced by velocity
     vec3 n1 = (particleA.position - particleB.position).normalized();
     bool alive = particleA.velocity.dot(n1) * particleA.massinv - particleB.velocity.dot(n1) * particleB.massinv < 0;
     vec3 dp1e = {0, 0, 0};
@@ -1040,7 +1015,6 @@ __global__ void createConstraintWalls(Saiga::ArrayView<Particle> particles, Saig
 
 // 2.1 just like resolveCollision but directly changes BOTH particles with atomic funcitons
 __device__ void resolveConstraint(Particle &particleA, Particle &particleB, float d0, float dt, float elast_const, float spring_const, float frict_const) {
-    // TODO refactor momentum replaced by velocity
     vec3 n1 = (particleA.position - particleB.position).normalized();
     bool alive = particleA.velocity.dot(n1) * particleA.massinv - particleB.velocity.dot(n1) * particleB.massinv < 0;
     vec3 dp1e = {0, 0, 0};
@@ -1050,7 +1024,6 @@ __device__ void resolveConstraint(Particle &particleA, Particle &particleB, floa
     vec3 p1 = particleA.velocity;
     vec3 p2 = particleB.velocity;
     vec3 dp1f = frictionCollision(p1, p2, n1, frict_const);
-
 
     vec3 d_momentum = dp1e + dp1s + dp1f;
     atomicAdd(&particleA.velocity[0], d_momentum[0]);
@@ -1064,7 +1037,6 @@ __device__ void resolveConstraint(Particle &particleA, Particle &particleB, floa
 
 // 2.1 just like resolveCollision but directly changes BOTH particles with atomic funcitons
 __device__ void resolveConstraint(Particle &particle, Saiga::Plane &plane, float d0, float dt, float elast_const, float spring_const, float frict_const) {
-    // TODO refactor momentum replaced by velocity
     bool alive = particle.velocity.dot(plane.normal) * particle.massinv < 0;
     vec3 dp1e = {0, 0, 0};
     if (alive)
@@ -1438,8 +1410,6 @@ __global__ void solverPBDClothBending(Saiga::ArrayView<Particle> particles, Clot
     vec3 p2 = particles[idx[1]].predicted - p12;
     vec3 p3 = particles[idx[2]].predicted - p12;
     vec3 p4 = particles[idx[3]].predicted - p12;
-    //printf("%i %i; %i %i; %f %f %f, %f %f %f, %f %f %f, %f %f %f\n", idx_[1], idx_[2], idx[1], idx[2], particles[idx[1]].predicted.x(), particles[idx[1]].predicted.y(), particles[idx[1]].predicted.z(), particles[idx[2]].predicted.x(), particles[idx[2]].predicted.y(), particles[idx[2]].predicted.z(),
-    //    p12.x(), p12.y(), p12.z(), p2.x(), p2.y(), p2.z());
 
     vec3 n1 = (p2.cross(p3)).normalized();
     vec3 n2 = (p2.cross(p4)).normalized();
@@ -1489,8 +1459,6 @@ __global__ void solverPBDClothBending(Saiga::ArrayView<Particle> particles, Clot
     float dp2 = -(omega1 * sqrt_d2 * (acosf(d) - angle0)) / (sum_omega_q);
     float dp3 = -(omega1 * sqrt_d2 * (acosf(d) - angle0)) / (sum_omega_q);
     float dp4 = -(omega1 * sqrt_d2 * (acosf(d) - angle0)) / (sum_omega_q);
-
-    //printf("%f %f %f, %f %f %f, %f %f %f, %f %f %f\n", n1.x(), n1.y(), n1.z(), q2.x(), q2.y(), q2.z(), q3.x(), q3.y(), q3.z(), q4.x(), q4.y(), q4.z());
 
     changePredicted(particles[idx[0]], dp * q1);
     changePredicted(particles[idx[1]], dp * q2);
@@ -1553,7 +1521,7 @@ __global__ void createLinkedCells(Saiga::ArrayView<Particle> particles, std::pai
 __global__ void calculateHash(Saiga::ArrayView<Particle> particles, int* particle_hash, std::pair<int, int>* cell_list, int* particle_list, ivec3 cell_dims, int cellCount, float cellSize, int hashFunction) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id < particles.size()) {
-        ivec3 cell_idx = calculate_cell_idx(particles[ti.thread_id].predicted, cellSize); // TODO predicted or position ??? others only use predicted
+        ivec3 cell_idx = calculate_cell_idx(particles[ti.thread_id].predicted, cellSize);
         int flat_cell_idx = calculate_hash_idx(cell_idx, cell_dims, cellCount, hashFunction);
         particle_hash[ti.thread_id] = flat_cell_idx;
     }
@@ -1889,25 +1857,17 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         //Particle pb = particles[neighbor_particle_idx];
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
-                        // Exclude current particle (r = 0) from force calculation
-                        //if (!(x == 0 && y == 0 && z == 0) || neighbor_particle_idx > ti.thread_id) {
                         int rbIDb = particles[neighbor_particle_idx].rbID;
-                        //if (rbIDa == -2) { // TODO an anfang der for loop verschieben
-                            //float d0 = collideSphereSphere(h, 0, pa.predicted, pb.predicted);
-                            //if (d0 > 0) {
-                                vec3 d_p = pa.predicted - pb.predicted;
+                        
+                        vec3 d_p = pa.predicted - pb.predicted;
 
-                                float d_rho = m * W_poly6((d_p).norm(), h);
-                                rho += d_rho;
+                        float d_rho = m * W_poly6((d_p).norm(), h);
+                        rho += d_rho;
 
-                                vec3 spiky = W_spiky(d_p, h, epsilon_spiky) * rho0inv;
-                                float spiky_norm = spiky.norm();
-                                spiky_sum += spiky;
-                                lambda2 += spiky_norm * spiky_norm;
-                            //}
-                        //}
-                        // Follow linked list
-                        //neighbor_particle_idx = particle_list[neighbor_particle_idx];
+                        vec3 spiky = W_spiky(d_p, h, epsilon_spiky) * rho0inv;
+                        float spiky_norm = spiky.norm();
+                        spiky_sum += spiky;
+                        lambda2 += spiky_norm * spiky_norm;
                     }
                 }
             }
@@ -1917,8 +1877,6 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
         float lambda1 = spiky_sum.norm();
         lambda1 *= lambda1;
         float lambda = -C_density / (lambda1 + lambda2 + omega_lambda_relax);
-
-        //printf("%f, %f\n", lambda1, lambda2);
 
         particles[ti.thread_id].lambda = lambda;
     }
@@ -1957,33 +1915,25 @@ __global__ void updateParticlesPBD2IteratorFluid(Saiga::ArrayView<Particle> part
                             continue;
                         //Particle pb = particles[neighbor_particle_idx];
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
-                        // Exclude current particle (r = 0) from force calculation
-                        //if (!(x == 0 && y == 0 && z == 0) || neighbor_particle_idx > ti.thread_id) {
-                        //if (rbIDa == -2 && rbIDb == -2) {
-                            //float d0 = collideSphereSphere(h, 0, pa.predicted, pb.predicted);
-                            //if (d0 > 0) {
-                                // 6 d
-                                float lambda1 = particles[ti.thread_id].lambda;
-                                float lambda2 = particles[neighbor_particle_idx].lambda;
+
+                        // 6 d
+                        float lambda1 = particles[ti.thread_id].lambda;
+                        float lambda2 = particles[neighbor_particle_idx].lambda;
                                 
-                                vec3 d_p = pa.predicted - pb.predicted;
-                                vec3 spiky = W_spiky(d_p, h, epsilon_spiky);
+                        vec3 d_p = pa.predicted - pb.predicted;
+                        vec3 spiky = W_spiky(d_p, h, epsilon_spiky);
 
-                                // 6 e surface
-                                float d_poly = W_poly6((d_p).norm(), h) / w_poly_d_q;// W_poly6(delta_q * h, h); // TODO 2. W const ?
-                                float poly = d_poly;
-                                for (int i = 0; i < artificial_pressure_n - 1; i++) {
-                                    poly *= d_poly;
-                                }
-                                float s_corr = -artificial_pressure_k * poly;
+                        // 6 e surface
+                        float d_poly = W_poly6((d_p).norm(), h) / w_poly_d_q; // W_poly6(delta_q * h, h);
+                        float poly = d_poly;
+                        for (int i = 0; i < artificial_pressure_n - 1; i++) {
+                            poly *= d_poly;
+                        }
+                        float s_corr = -artificial_pressure_k * poly;
 
-                                // 6 d, e
-                                vec3 d_lambda_spiky = (lambda1 + lambda2 + s_corr) * spiky;
-                                lambda_spiky += d_lambda_spiky;
-                            //}
-                        //}
-                        // Follow linked list
-                        //neighbor_particle_idx = particle_list[neighbor_particle_idx];
+                        // 6 d, e
+                        vec3 d_lambda_spiky = (lambda1 + lambda2 + s_corr) * spiky;
+                        lambda_spiky += d_lambda_spiky;
                     }
                 }
             }
@@ -2021,36 +1971,24 @@ __global__ void computeVorticityAndViscosity(float dt, Saiga::ArrayView<Particle
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         //Particle& pb = particles[neighbor_particle_idx];
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc1*>(&particles[neighbor_particle_idx].velocity), &pb);
-                        // Exclude current particle (r = 0) from force calculation
-                        //if (!(x == 0 && y == 0 && z == 0) || neighbor_particle_idx > ti.thread_id) {
+
                         int rbIDb = pb.rbID;
                         if (rbIDb != -2)
                             continue;
-                            //float d0 = collideSphereSphere(h, 0, pa.predicted, pb.predicted);
-                            //if (d0 > 0) {
-                                // 6 f 1
-                                // vorticity
-                                //vec3 v_i = (pa.predicted - pa.position) / dt;
-                                //vec3 v_j = (pb.predicted - pb.position) / dt;
 
-                                //vec3 v_i = pa.velocity;
-                                //vec3 v_j = pb.velocity;
+                        // 6 f 1
+                        // vorticity
+                        vec3 d_velocity = pb.velocity - pa.velocity;
 
-                                vec3 d_velocity = pb.velocity - pa.velocity;
-
-                                vec3 d_p = pa.position - pb.position;
+                        vec3 d_p = pa.position - pb.position;
                                 
-                                vec3 spiky = W_spiky(d_p, h, epsilon_spiky);
-                                curl += d_velocity.cross(spiky);
+                        vec3 spiky = W_spiky(d_p, h, epsilon_spiky);
+                        curl += d_velocity.cross(spiky);
 
-                                // 6 g
-                                // viscosity
-                                float poly = W_poly6((d_p).norm(), h);
-                                viscosity += d_velocity * poly;
-
-                            //}
-                        // Follow linked list
-                        //neighbor_particle_idx = particle_list[neighbor_particle_idx];
+                        // 6 g
+                        // viscosity
+                        float poly = W_poly6((d_p).norm(), h);
+                        viscosity += d_velocity * poly;
                     }
                 }
             }
@@ -2058,8 +1996,7 @@ __global__ void computeVorticityAndViscosity(float dt, Saiga::ArrayView<Particle
 
         particles[ti.thread_id].sdf = curl;
 
-        //particles[ti.thread_id].velocity += c_viscosity * viscosity;
-        particles[ti.thread_id].d_momentum = c_viscosity * viscosity; // TODO
+        particles[ti.thread_id].d_momentum = c_viscosity * viscosity;
     }
 }
 
@@ -2090,19 +2027,13 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         //Particle& pb = particles[neighbor_particle_idx];
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc3*>(&particles[neighbor_particle_idx].position), &pb);
-                        // Exclude current particle (r = 0) from force calculation
-                        //if (!(x == 0 && y == 0 && z == 0) || neighbor_particle_idx > ti.thread_id) {
                         int rbIDb = pb.rbID;
                         if (rbIDb != -2)
                             continue;
-                            //float d0 = collideSphereSphere(h, 0, pa.predicted, pb.predicted);
-                            //if (d0 > 0) {
-                                // 6 f
-                                // vorticity
-                                curl_gradient += pa.sdf.norm() * W_spiky(pa.position - pb.position, h, epsilon_spiky);
-                            //}
-                        // Follow linked list
-                        //neighbor_particle_idx = particle_list[neighbor_particle_idx];
+                            
+                        // 6 f
+                        // vorticity
+                        curl_gradient += pa.sdf.norm() * W_spiky(pa.position - pb.position, h, epsilon_spiky);
                     }
                 }
             }
@@ -2112,7 +2043,6 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
         // apply vorticity force
         particles[ti.thread_id].velocity += force * pa.massinv;
 
-        // TODO
         // apply viscosity
         particles[ti.thread_id].velocity += pa.d_momentum;
 
@@ -2520,7 +2450,6 @@ __global__ void rayRevert(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, 
     if (ti.thread_id == 0) {
         int idx = list[min].first;
         particles[idx].radius = 0.5;
-        // TODO refactor momentum replaced by velocity
         particles[idx].velocity = {0,0,0};
         particles[idx].d_momentum = {0,0,0};
     }
@@ -2573,7 +2502,6 @@ __global__ void raySplit(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, t
             }
 
             // pseudo random offset
-            // TODO refactor momentum replaced by velocity
             int x = p.position[0] * 10.0 + p.velocity[0] * 100.0 + p.velocity[0] * 100.0;
             int y = p.position[1] * 10.0 + p.velocity[1] * 100.0 + p.velocity[1] * 100.0;
             int z = p.position[2] * 10.0 + p.velocity[2] * 100.0 + p.velocity[2] * 100.0;
@@ -2600,7 +2528,6 @@ __global__ void raySplit(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, t
             p.radius = r;
             p.color = particle.color;
             p.velocity = particle.velocity;
-            // TODO refactor momentum replaced by velocity
         }
     }
 

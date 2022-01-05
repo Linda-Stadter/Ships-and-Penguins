@@ -11,16 +11,16 @@ ParticleSystem::ParticleSystem(int _particleCount, vec3 _boxMin, vec3 _boxDim)
 {
     cudaStreamCreate(&stream1); cudaStreamCreate(&stream2); cudaStreamCreate(&stream3);
 
-    checkError(cudaMalloc((void **)&d_constraintList, sizeof(int) * maxConstraintNum*2)); // TODO replace sozeof(int) with actual type
-    checkError(cudaMalloc((void **)&d_constraintCounter, sizeof(int) * 1));
-    checkError(cudaMalloc((void **)&d_constraintListWalls, sizeof(int) * maxConstraintNumWalls*2));
-    checkError(cudaMalloc((void **)&d_constraintCounterWalls, sizeof(int) * 1));
-    checkError(cudaMalloc((void **)&d_rayHitCount, sizeof(int) * 1));
+    checkError(cudaMalloc((void **)&d_constraintList, sizeof(int) * maxConstraintNum * 2));
+    checkError(cudaMalloc((void **)&d_constraintCounter, sizeof(int)));
+    checkError(cudaMalloc((void **)&d_constraintListWalls, sizeof(int) * maxConstraintNumWalls * 2));
+    checkError(cudaMalloc((void **)&d_constraintCounterWalls, sizeof(int)));
+    checkError(cudaMalloc((void **)&d_rayHitCount, sizeof(int)));
 
     checkError(cudaMalloc((void **)&d_constraintListCloth, sizeof(ClothConstraint) * maxConstraintNumCloth));
-    checkError(cudaMalloc((void **)&d_constraintCounterCloth, sizeof(int) * 1));
+    checkError(cudaMalloc((void **)&d_constraintCounterCloth, sizeof(int)));
     checkError(cudaMalloc((void **)&d_constraintListClothBending, sizeof(ClothBendingConstraint) * maxConstraintNumClothBending));
-    checkError(cudaMalloc((void **)&d_constraintCounterClothBending, sizeof(int) * 1));
+    checkError(cudaMalloc((void **)&d_constraintCounterClothBending, sizeof(int)));
 
     checkError(cudaMalloc((void **)&d_particleIdLookup, sizeof(int) * particleCount));
     

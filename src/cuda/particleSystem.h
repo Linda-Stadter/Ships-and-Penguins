@@ -58,7 +58,7 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     int *d_constraintCounter;
     int *d_constraintList;
-    int maxConstraintNum = particleCount*16;
+    int maxConstraintNum = particleCount * 16;
 
     int *d_constraintCounterWalls;
     int *d_constraintListWalls;
