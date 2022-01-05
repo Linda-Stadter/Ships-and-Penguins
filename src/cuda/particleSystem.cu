@@ -1107,7 +1107,7 @@ __global__ void resolveConstraintWalls(Saiga::ArrayView<Particle> particles, Sai
 }
 
 // 2.2
-__device__ vec3 resolvePBD(Particle &particleA, Particle &particleB) {
+/*__device__ vec3 resolvePBD(Particle &particleA, Particle &particleB) {
     vec3 p1 = particleA.predicted;
     vec3 p2 = particleB.predicted;
     float mi1 = particleA.massinv;
@@ -1126,7 +1126,7 @@ __device__ vec3 resolvePBD(Particle &particle, Saiga::Plane &wall) {
     vec3 n = wall.normal;
     vec3 dx1 = - (mi1 / (mi1 + mi2)) * d * n;
     return dx1;
-}
+}*/
 
 __global__ void solverPBDParticles(Saiga::ArrayView<Particle> particles, int *constraints, int *constraintCounter, int maxConstraintNum, float relaxP, bool jacobi) {
     Saiga::CUDA::ThreadInfo<> ti;
@@ -1153,7 +1153,7 @@ __global__ void solverPBDParticles(Saiga::ArrayView<Particle> particles, int *co
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
     float m = (m1 / (m1 + m2));
     vec3 dx1 = m * d * n; //resolvePBD(pa_copy, pb_copy);
-    vec3 dx2 = - (1 - m) * d * n;
+    vec3 dx2 = - (1.0f - m) * d * n;
 
     if (pa.fixed)
         dx2 *= 2.0;
@@ -1186,7 +1186,7 @@ __global__ void solverPBDParticles(Saiga::ArrayView<Particle> particles, int *co
     }
 }
 
-__global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int *constraints, int *constraintCounter, int maxConstraintNum, float relaxP, bool jacobi, RigidBody *rigidBodies) {
+__global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int *constraints, int *constraintCounter, int maxConstraintNum, float relaxP, bool jacobi, RigidBody *rigidBodies, float mu_k=0, float mu_s=0, float mu_f=0) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= *constraintCounter || ti.thread_id >= maxConstraintNum)
         return;
@@ -1241,7 +1241,7 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
             d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted); // TODO redundant?
             vec3 xij = -(pa_copy.predicted - pb_copy.predicted).normalized();
             if (xij.dot(n) < 0.f) {
-                n = xij - 2*(xij.dot(n))*n;
+                n = xij - 2.0f*(xij.dot(n))*n;
             } else {
                 n = xij;
             }
@@ -1251,12 +1251,32 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
 
     float m = (m1 / (m1 + m2));
     vec3 dx1 = m * d * n; //resolvePBD(pa_copy, pb_copy);
-    vec3 dx2 = - (1 - m) * d * n;
+    vec3 dx2 = - (1.0f - m) * d * n;
+
+    // Friction
+    // TODO put friction after fixed check and also set other dx to 0?
+    //vec3 a = ((pa.predicted - pa.position) - (pb.predicted - pb.position));
+    vec3 a = ((pa.position - pa.predicted) - (pb.position - pb.predicted));
+    vec3 dx_orthogonal = a - (a.dot(n))*n; // a_orthogonal_n
+
+    if (!dx_orthogonal.norm() < mu_s * d) {
+        float min = mu_k * d / dx_orthogonal.norm();
+        min = min <= 1.0 ? min : 1.0;
+        dx_orthogonal *= min;
+    }
+
+    vec3 dx1_f = m * dx_orthogonal;
+    vec3 dx2_f = - (1.0f - m) * dx_orthogonal;
+    
+    dx1 += dx1_f * mu_f;
+    dx2 += dx2_f * mu_f;
+    // END Friction
 
     if (pa.fixed)
         dx2 *= 2.0;
     if (pb.fixed)
         dx1 *= 2.0;
+
 
     // jacobi integration mode: set predicted directly without using d_predicted and apply relax here to dx1
     if (jacobi) {
@@ -1284,7 +1304,7 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
     }
 }
 
-__global__ void solverPBDWalls(Saiga::ArrayView<Particle> particles, Saiga::ArrayView<Saiga::Plane> walls, int *constraints, int *constraintCounter, int maxConstraintNum, float relaxP, bool jacobi) {
+__global__ void solverPBDWalls(Saiga::ArrayView<Particle> particles, Saiga::ArrayView<Saiga::Plane> walls, int *constraints, int *constraintCounter, int maxConstraintNum, float relaxP, bool jacobi, float mu_k=0, float mu_s=0, float mu_f=0) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= *constraintCounter || ti.thread_id >= maxConstraintNum)
         return;
@@ -1296,7 +1316,32 @@ __global__ void solverPBDWalls(Saiga::ArrayView<Particle> particles, Saiga::Arra
     if (p.fixed)
         return;
 
-    vec3 dx1 = resolvePBD(p, w);
+    //vec3 dx1 = resolvePBD(p, w);
+
+    float m1 = p.massinv;
+    float m2 = 0;
+    float d = -collideSpherePlane(p.radius, p.predicted, w);
+    //float d = -wall.sphereOverlap(particle.predicted, particle.radius);
+    vec3 n = w.normal;
+    float m = (m1 / (m1 + m2));
+    vec3 dx1 = - m * d * n;
+
+    // Friction
+    //vec3 a = ((pa.predicted - pa.position) - (pb.predicted - pb.position));
+    vec3 a = (p.position - p.predicted);
+    vec3 dx_orthogonal = a - (a.dot(n))*n; // a_orthogonal_n
+
+    if (!dx_orthogonal.norm() < mu_s * d) {
+        float min = mu_k * d / dx_orthogonal.norm();
+        min = min <= 1.0 ? min : 1.0;
+        dx_orthogonal *= min;
+    }
+
+    vec3 dx1_f = m * dx_orthogonal;
+    vec3 dx2_f = - (1.0f - m) * dx_orthogonal;
+    
+    dx1 += dx1_f * mu_f;
+    // END Friction
 
     if (jacobi) {
         atomicAdd(&p.d_predicted[0], dx1[0]);
@@ -1343,7 +1388,7 @@ __global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstr
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
     float m = (m1 / (m1 + m2));
     vec3 dx1 = m * d * n; //resolvePBD(pa_copy, pb_copy);
-    vec3 dx2 = - (1 - m) * d * n;
+    vec3 dx2 = - (1.0f - m) * d * n;
 
     if (pa.fixed)
         dx2 *= 2.0;
@@ -1411,7 +1456,7 @@ __global__ void solverPBDClothBending(Saiga::ArrayView<Particle> particles, Clot
 
     vec3 q3 = (p2.cross(n2) + n1.cross(p2)*d) / (p2.cross(p3).norm());
     vec3 q4 = (p2.cross(n1) + n2.cross(p2)*d) / (p2.cross(p4).norm());
-    vec3 q2 = (p3.cross(n2) + n1.cross(p3)*d) / (p2.cross(p3).norm()) - (p4.cross(n1) + n2.cross(p4)*d) / (p2.cross(p4).norm());
+    vec3 q2 = - (p3.cross(n2) + n1.cross(p3)*d) / (p2.cross(p3).norm()) - (p4.cross(n1) + n2.cross(p4)*d) / (p2.cross(p4).norm());
     vec3 q1 = -q2-q3-q4;
 
     //if (q1.norm() < epsilon || q2.norm() < epsilon || q3.norm() < epsilon || q4.norm() < epsilon)
@@ -1437,7 +1482,7 @@ __global__ void solverPBDClothBending(Saiga::ArrayView<Particle> particles, Clot
     float dp3 = -(omega1 * sqrt_d2 * (acosf(d) - angle0)) / (norm2_2 + norm2_1 + norm2_4);
     float dp4 = -(omega1 * sqrt_d2 * (acosf(d) - angle0)) / (norm2_2 + norm2_3 + norm2_1);*/
 
-    float dp = -(omega1 * sqrt_d2 * (acosf(d) - angle0)) / (sum_omega_q);
+    float dp = - (omega1 * sqrt_d2 * (acosf(d) - angle0)) / (sum_omega_q);
     dp *= testFloat;
 
     float dp1 = -(omega1 * sqrt_d2 * (acosf(d) - angle0)) / (sum_omega_q);
@@ -2292,11 +2337,11 @@ void ParticleSystem::update(float dt) {
             // TODO N -> maxConstraintNum
             if (useSDF) {
                 updateRigidBodies();
-                solverPBDParticlesSDF<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi, d_rigidBodies);
+                solverPBDParticlesSDF<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi, d_rigidBodies, mu_k, mu_s, mu_f);
             } else {
                 solverPBDParticles<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi);
             }
-            solverPBDWalls<<<Saiga::CUDA::getBlockCount(maxConstraintNumWalls, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, relaxP, jacobi);
+            solverPBDWalls<<<Saiga::CUDA::getBlockCount(maxConstraintNumWalls, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, relaxP, jacobi, mu_k, mu_s, mu_f);
             CUDA_SYNC_CHECK_ERROR();
 
             updateParticlesPBD2Iterator<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, calculatedRelaxP);
@@ -2374,11 +2419,11 @@ void ParticleSystem::update(float dt) {
             // TODO N -> maxConstraintNum
             if (useSDF) {
                 updateRigidBodies();
-                solverPBDParticlesSDF<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi, d_rigidBodies);
+                solverPBDParticlesSDF<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi, d_rigidBodies, mu_k, mu_s, mu_f);
             } else {
                 solverPBDParticles<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relaxP, jacobi);
             }
-            solverPBDWalls<<<Saiga::CUDA::getBlockCount(maxConstraintNumWalls, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, relaxP, jacobi);
+            solverPBDWalls<<<Saiga::CUDA::getBlockCount(maxConstraintNumWalls, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, relaxP, jacobi, mu_k, mu_s, mu_f);
             CUDA_SYNC_CHECK_ERROR();
 
             solverPBDCloth<<<Saiga::CUDA::getBlockCount(maxConstraintNumCloth, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintListCloth, d_constraintCounterCloth, maxConstraintNumCloth, d_particleIdLookup);

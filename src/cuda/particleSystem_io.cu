@@ -33,6 +33,10 @@ void ParticleSystem::renderGUI()
         ImGui::Checkbox("test bool", &testBool);
         ImGui::InputFloat("test float", &testFloat);
 
+        ImGui::InputFloat("kinetic friction", &mu_k);
+        ImGui::InputFloat("static friction", &mu_s);
+        ImGui::InputFloat("friction", &mu_f);
+
         ImGui::InputFloat("h", &h);
         ImGui::InputFloat("epsilon_spiky", &epsilon_spiky);
         ImGui::InputFloat("omega_lambda_relax", &omega_lambda_relax);

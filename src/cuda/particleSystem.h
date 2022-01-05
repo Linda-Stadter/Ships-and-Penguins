@@ -80,24 +80,28 @@ class SAIGA_ALIGN(16) ParticleSystem
     float frict_const = 0.1;
 
     bool jacobi = true;
-    float dampV = 1.0;
+    float dampV = 0.995;
     float relaxP = 0.25;
-    int solverIterations = 2;
+    int solverIterations = 4;
     bool useCalculatedRelaxP = true;
 
     bool testBool = true;
     float testFloat = 0.05;
 
+    float mu_k = 0.1;
+    float mu_s = 0.8;
+    float mu_f = 0.5;
+
     float h = 1.0;
-    float epsilon_spiky = 0.001;
-    float omega_lambda_relax = 200;
+    float epsilon_spiky = 1e-5;
+    float omega_lambda_relax = 4;
 
     float artificial_pressure_k = 0.1;
     int artificial_pressure_n = 4;
     float delta_q = 0.2; // 0.1 - 0.3
 
     float c_viscosity = 0.01;
-    float epsilon_vorticity = 0.01;
+    float epsilon_vorticity = 0.007;
 
     float particleRadiusRestDensity = 0.25;
 
