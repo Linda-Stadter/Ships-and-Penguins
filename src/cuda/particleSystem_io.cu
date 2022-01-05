@@ -24,7 +24,6 @@ void ParticleSystem::renderGUI()
         ImGui::Checkbox("useCalculatedRelaxP", &useCalculatedRelaxP);
         ImGui::InputFloat("relax", &relaxP);
         ImGui::InputFloat("damp", &dampV);
-        ImGui::Checkbox("Jacobi Solver (or Gauss-Seidel)", &jacobi);
 
         ImGui::InputFloat("particleRadiusRestDensity", &particleRadiusRestDensity);
         ImGui::InputFloat("particleRadiusWater", &particleRadiusWater);
@@ -56,7 +55,6 @@ void ParticleSystem::renderGUI()
         ImGui::InputInt("splitCount", &splitCount);
 
         ImGui::Separator();
-        ImGui::Combo("hashing", &hashFunction, hashes, std::size(hashes));
     }
     ImGui::End();
 }

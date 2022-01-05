@@ -79,7 +79,6 @@ class SAIGA_ALIGN(16) ParticleSystem
     float spring_const = 800;
     float frict_const = 0.1;
 
-    bool jacobi = true;
     float dampV = 0.995;
     float relaxP = 0.25;
     int solverIterations = 4;
@@ -110,8 +109,8 @@ class SAIGA_ALIGN(16) ParticleSystem
     int *d_rayHitCount;
 
     // GUI
-    const char* physics[8] = {"1.0 Force Based", "2.1 Force Based + Constraint Lists", "2.2 Position Based", "Force Based + Linked Cell", "3.0 Position Based + Linked Cell", "4.0 Rigid Body", "5.0 Fluid", "Cloth"};
-    int physicsMode = 6;
+    const char* physics[1] = {"Physics"};
+    int physicsMode = 0;
     const char* actions[7] = {"Color", "Impulse", "Explode", "Implode", "Split", "Inflate", "Deflate"};
     int actionMode = 0;
 
@@ -124,9 +123,6 @@ class SAIGA_ALIGN(16) ParticleSystem
     vec3 boxMin;
     ivec3 cellDim;
     int cellCount;
-    int hashFunction = 1;
-    // GUI
-    const char* hashes[2] = {"random Hashing", "spatial Hashing"};
 
     float maxParticleRadius = 0.5;
     float cellSize;
