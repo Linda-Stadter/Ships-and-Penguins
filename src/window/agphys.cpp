@@ -116,6 +116,13 @@ void Agphys::loadScenario()
         zCount = 50;
         corner = {-15, 15, -15};
         boxDim = {80, 80, 80};
+    } else if (scenario == 11) {
+        numberParticles = 2000 * 4 * 4 * 4;
+        distance = 0.5;
+        xCount = 10 * 4;
+        zCount = 20 * 4;
+        corner = {-30*2, 0, -10*2};
+        boxDim = {60*2, 20*2, 20*2};
     } else {
         numberParticles = 100000;
         distance = 0.99;

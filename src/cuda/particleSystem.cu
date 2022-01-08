@@ -37,12 +37,18 @@ __global__ void updateParticlesPBD1_radius(float dt, vec3 gravity, Saiga::ArrayV
     else if (p.rbID == -3)
         p.radius = particleRadiusCloth;
 
+    /*
     // p.velocity += dt * p.massinv * gravity; // falsch auf folie
     p.velocity += dt * gravity;
     // dampVelocities
     p.velocity *= dampV;
 
-    p.predicted = p.position + dt * p.velocity;
+    p.predicted = p.position + dt * p.velocity;*/
+    vec3 newVelocity = p.velocity + dt * gravity;
+    // dampVelocities
+    newVelocity *= dampV;
+
+    p.predicted = p.position + dt * newVelocity;
 }
 
 __global__ void updateParticlesPBD2Iterator(float dt, Saiga::ArrayView<Particle>particles, float relaxP) {
@@ -895,19 +901,20 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
     Particle &pa = particles[idxA];
     Particle &pb = particles[idxB];
 
+    if (pa.rbID == -2 && pb.rbID == -2) // deactivate for fluid
+        return;
+
     ParticleCalc pa_copy;
     Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[idxA]), &pa_copy);
     ParticleCalc pb_copy;
     Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[idxB]), &pb_copy);
 
-    float m1 = pa.massinv;
-    float m2 = pb.massinv;
+    // TODO mass von material abhaengig machen nicht aus particle lesen
+    float m1 = 1.0f; //pa.massinv;
+    float m2 = 1.0f; //pb.massinv;
 
     float d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
- 
-    if (pa.rbID == -2 && pb.rbID == -2) // deactivate for fluid
-        return;
     
     if (pa.rbID >= 0 || pb.rbID >= 0) {
         vec3 sdf1 = pa.sdf;
@@ -953,21 +960,23 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
     vec3 dx2 = - (1.0f - m) * d * n;
 
     // Friction
-    //vec3 a = ((pa.predicted - pa.position) - (pb.predicted - pb.position));
-    vec3 a = ((pa.position - pa.predicted) - (pb.position - pb.predicted));
-    vec3 dx_orthogonal = a - (a.dot(n))*n; // a_orthogonal_n
+    if (mu_f) {
+        //vec3 a = ((pa.predicted - pa.position) - (pb.predicted - pb.position));
+        vec3 a = ((pa.position - pa.predicted) - (pb.position - pb.predicted));
+        vec3 dx_orthogonal = a - (a.dot(n))*n; // a_orthogonal_n
 
-    if (!dx_orthogonal.norm() < mu_s * d) {
-        float min = mu_k * d / dx_orthogonal.norm();
-        min = min <= 1.0 ? min : 1.0;
-        dx_orthogonal *= min;
+        if (!dx_orthogonal.norm() < mu_s * d) {
+            float min = mu_k * d / dx_orthogonal.norm();
+            min = min <= 1.0 ? min : 1.0;
+            dx_orthogonal *= min;
+        }
+
+        vec3 dx1_f = m * dx_orthogonal;
+        vec3 dx2_f = - (1.0f - m) * dx_orthogonal;
+        
+        dx1 += dx1_f * mu_f;
+        dx2 += dx2_f * mu_f;
     }
-
-    vec3 dx1_f = m * dx_orthogonal;
-    vec3 dx2_f = - (1.0f - m) * dx_orthogonal;
-    
-    dx1 += dx1_f * mu_f;
-    dx2 += dx2_f * mu_f;
     // END Friction
 
     if (pa.fixed)
@@ -1000,7 +1009,8 @@ __global__ void solverPBDWalls(Saiga::ArrayView<Particle> particles, Saiga::Arra
     if (p.fixed)
         return;
 
-    float m1 = p.massinv;
+    // TODO mass von material abhaengig machen nicht aus particle lesen
+    float m1 = 1.0f; //p.massinv;
     float m2 = 0;
     float d = -collideSpherePlane(p.radius, p.predicted, w);
     //float d = -wall.sphereOverlap(particle.predicted, particle.radius);
@@ -1009,20 +1019,22 @@ __global__ void solverPBDWalls(Saiga::ArrayView<Particle> particles, Saiga::Arra
     vec3 dx1 = - m * d * n;
 
     // Friction
-    //vec3 a = ((pa.predicted - pa.position) - (pb.predicted - pb.position));
-    vec3 a = (p.position - p.predicted);
-    vec3 dx_orthogonal = a - (a.dot(n))*n; // a_orthogonal_n
+    if (mu_f) {
+        //vec3 a = ((pa.predicted - pa.position) - (pb.predicted - pb.position));
+        vec3 a = (p.position - p.predicted);
+        vec3 dx_orthogonal = a - (a.dot(n))*n; // a_orthogonal_n
 
-    if (!dx_orthogonal.norm() < mu_s * d) {
-        float min = mu_k * d / dx_orthogonal.norm();
-        min = min <= 1.0 ? min : 1.0;
-        dx_orthogonal *= min;
-    }
+        if (!dx_orthogonal.norm() < mu_s * d) {
+            float min = mu_k * d / dx_orthogonal.norm();
+            min = min <= 1.0 ? min : 1.0;
+            dx_orthogonal *= min;
+        }
 
-    vec3 dx1_f = m * dx_orthogonal;
-    vec3 dx2_f = - (1.0f - m) * dx_orthogonal;
+        vec3 dx1_f = m * dx_orthogonal;
+        vec3 dx2_f = - (1.0f - m) * dx_orthogonal;
     
-    dx1 += dx1_f * mu_f;
+        dx1 += dx1_f * mu_f;
+    }
     // END Friction
 
     atomicAdd(&p.d_predicted[0], dx1[0]);
@@ -1054,8 +1066,9 @@ __global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstr
     ParticleCalc pb_copy;
     Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[idxB]), &pb_copy);
 
-    float m1 = pa.massinv;
-    float m2 = pb.massinv;
+    // TODO mass von material abhaengig machen nicht aus particle lesen
+    float m1 = 1.0f; //pa.massinv;
+    float m2 = 1.0f; //pb.massinv;
 
     float d = collideSphereSphere(constraints[ti.thread_id].dist, 0, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
@@ -1184,10 +1197,18 @@ __device__ ivec3 calculate_cell_idx(vec3 position, float cellSize) {
     return idxf.cast<int>();*/
 }
 
-__device__ int calculate_hash_idx(ivec3 cell_idx, ivec3 cell_dims, int cellCount) {
+/*__device__ int calculate_hash_idx(ivec3 cell_idx, ivec3 cell_dims, int cellCount) {
     int i2 = ((cell_idx.x() % cell_dims.x()) + cell_dims.x()) % cell_dims.x();
     int j2 = ((cell_idx.y() % cell_dims.y()) + cell_dims.y()) % cell_dims.y();
     int k2 = ((cell_idx.z() % cell_dims.z()) + cell_dims.z()) % cell_dims.z();
+    int flat_cell_idx = i2 * cell_dims.y() * cell_dims.z() + j2 * cell_dims.z() + k2;
+    return flat_cell_idx;
+}*/
+// TODO fails if position is too negative
+__device__ int calculate_hash_idx(ivec3 cell_idx, ivec3 cell_dims, int cellCount) {
+    int i2 = (cell_idx.x() + cell_dims.x()) % cell_dims.x();
+    int j2 = (cell_idx.y() + cell_dims.y()) % cell_dims.y();
+    int k2 = (cell_idx.z() + cell_dims.z()) % cell_dims.z();
     int flat_cell_idx = i2 * cell_dims.y() * cell_dims.z() + j2 * cell_dims.z() + k2;
     return flat_cell_idx;
 }
@@ -1313,9 +1334,10 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
 __device__ __host__ float W_poly6(float r, float h) {
     if (r > h)
         return 0;
-    float hd = h * h - r * r;
+    float h2 = h * h;
+    float hd = h2 - r * r;
     float hd3 = hd * hd * hd;
-    float h3 = h * h * h;
+    float h3 = h2 * h;
     float h9 = h3 * h3 * h3;
     return 315.f / (64.f * M_PI * h9) * hd3;
 }
@@ -1325,7 +1347,8 @@ __device__ __host__ vec3 W_spiky(vec3 r, float h, float epsilon) {
     if (d <= epsilon || d > h)
         return {0, 0, 0};
     float hd = h - d;
-    vec3 hd2 = r.normalized() * hd * hd;
+    //vec3 hd2 = r.normalized() * hd * hd;
+    vec3 hd2 = r/d * hd * hd;
     float h3 = h * h * h;
     float h6 = h3 * h3;
     return -45.f / (M_PI * h6) * hd2;
@@ -1401,6 +1424,9 @@ __global__ void updateParticlesPBD2IteratorFluid(Saiga::ArrayView<Particle> part
         ParticleCalc pb;
         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[ti.thread_id]), &pa);
 
+        // 6 d
+        float lambda1 = particles[ti.thread_id].lambda;
+
         ivec3 cell_idx = calculate_cell_idx(pa.predicted, cellSize); // actually pa.position but we only load predicted and its identical here
 
         vec3 lambda_spiky = {0, 0, 0};
@@ -1422,7 +1448,6 @@ __global__ void updateParticlesPBD2IteratorFluid(Saiga::ArrayView<Particle> part
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
 
                         // 6 d
-                        float lambda1 = particles[ti.thread_id].lambda;
                         float lambda2 = particles[neighbor_particle_idx].lambda;
                                 
                         vec3 d_p = pa.predicted - pb.predicted;
@@ -1546,7 +1571,7 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
 
         vec3 force = epsilon_vorticity * curl_gradient.normalized().cross(pa.sdf);
         // apply vorticity force
-        particles[ti.thread_id].velocity += force * pa.massinv;
+        particles[ti.thread_id].velocity += force * 1.0f; // pa.massinv; // TODO mass von material abhaengig machen nicht aus particle lesen
 
         // apply viscosity
         particles[ti.thread_id].velocity += pa.d_momentum;
@@ -1578,7 +1603,6 @@ void ParticleSystem::update(float dt) {
         //createLinkedCells<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
         CUDA_SYNC_CHECK_ERROR();
 
-    // 4.0 einziger unterschied
         createConstraintParticlesLinkedCellsRigidBodiesFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize);
 
         createConstraintWalls<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls);
@@ -1591,7 +1615,7 @@ void ParticleSystem::update(float dt) {
         //thrust::fill(d, d+N, 2);
         //int N = thrust::remove_if(d, d + maxConstraintNum, remove_predicate_constraints()) - d;
 
-        CUDA_SYNC_CHECK_ERROR();
+        //CUDA_SYNC_CHECK_ERROR();
         // solver Iterations: project Constraints
 
         float w_poly_d_q = W_poly6(delta_q * h, h);
@@ -1600,15 +1624,12 @@ void ParticleSystem::update(float dt) {
 
         float calculatedRelaxP = relaxP;
         for (int i = 0; i < solverIterations; i++) {
-            // 6
-            // b, c
+            // 6 b, c
             computeDensityAndLambda<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, omega_lambda_relax, particleRadiusRestDensity);
             CUDA_SYNC_CHECK_ERROR();
-            // d, e
+            // 6 d, e
             updateParticlesPBD2IteratorFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, particleRadiusRestDensity, artificial_pressure_k, artificial_pressure_n, w_poly_d_q);
             CUDA_SYNC_CHECK_ERROR();
-            
-            // old:
 
             if (useCalculatedRelaxP) {
                 calculatedRelaxP = 1 - pow(1 - calculatedRelaxP, 1.0/(i+1));
@@ -1619,11 +1640,11 @@ void ParticleSystem::update(float dt) {
 
             solverPBDWalls<<<Saiga::CUDA::getBlockCount(maxConstraintNumWalls, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, relaxP, mu_k, mu_s, mu_f);
             CUDA_SYNC_CHECK_ERROR();
-
+            
             solverPBDCloth<<<Saiga::CUDA::getBlockCount(maxConstraintNumCloth, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintListCloth, d_constraintCounterCloth, maxConstraintNumCloth, d_particleIdLookup);
             if (testBool)
                 solverPBDClothBending<<<Saiga::CUDA::getBlockCount(maxConstraintNumClothBending, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintListClothBending, d_constraintCounterClothBending, maxConstraintNumClothBending, d_particleIdLookup, testFloat);
-
+            
             updateParticlesPBD2Iterator<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, calculatedRelaxP);
             CUDA_SYNC_CHECK_ERROR();
         }
@@ -1637,7 +1658,7 @@ void ParticleSystem::update(float dt) {
         CUDA_SYNC_CHECK_ERROR();
         applyVorticityAndViscosity<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, epsilon_vorticity);
         CUDA_SYNC_CHECK_ERROR();
-
+        
         cudaDeviceSynchronize();
     }
     steps += 1;
@@ -1710,7 +1731,7 @@ __global__ void rayRevert(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, 
     
     if (ti.thread_id == 0) {
         int idx = list[min].first;
-        particles[idx].radius = 0.5;
+        particles[idx].radius = 0.5; // TODO radius
         particles[idx].velocity = {0,0,0};
         particles[idx].d_momentum = {0,0,0};
     }

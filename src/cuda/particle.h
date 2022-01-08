@@ -23,7 +23,7 @@ struct SAIGA_ALIGN(16) Particle
     vec3 position;
 
     int rbID; // only here for memory vector copy reasons
-    vec3 sdf;
+    vec3 sdf; // used for both sdf and curl
 
     vec3 d_momentum; // TODO rename to d_velocity (only used between vorticityAndViscosity steps) maybe use something else?
     float massinv;
