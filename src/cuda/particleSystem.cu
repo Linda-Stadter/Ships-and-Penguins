@@ -37,13 +37,6 @@ __global__ void updateParticlesPBD1_radius(float dt, vec3 gravity, Saiga::ArrayV
     else if (p.rbID == -3)
         p.radius = particleRadiusCloth;
 
-    /*
-    // p.velocity += dt * p.massinv * gravity; // falsch auf folie
-    p.velocity += dt * gravity;
-    // dampVelocities
-    p.velocity *= damp_v;
-
-    p.predicted = p.position + dt * p.velocity;*/
     vec3 newVelocity = p.velocity + dt * gravity;
     // dampVelocities
     newVelocity *= damp_v;
@@ -1184,15 +1177,7 @@ __global__ void solverPBDClothBending(Saiga::ArrayView<Particle> particles, Clot
     changePredicted(particles[idx[3]], dp * q4);
 }
 
-__global__ void resetCellList(std::pair<int, int>* cell_list, int cellCount) {
-    Saiga::CUDA::ThreadInfo<> ti;
-
-    if (ti.thread_id < cellCount) {
-        cell_list[ti.thread_id].first = -1;
-    }
-}
-// TODO remove one
-__global__ void resetCellListOpti(std::pair<int, int>* cell_list, int cellCount, int particleCount) {
+__global__ void resetCellListOptimized(std::pair<int, int>* cell_list, int cellCount, int particleCount) {
     Saiga::CUDA::ThreadInfo<> ti;
 
     if (ti.thread_id < cellCount) {
@@ -1208,29 +1193,12 @@ __device__ ivec3 calculateCellIdx(vec3 position, float cellSize) {
     return idxf.cast<int>();*/
 }
 
-/*__device__ int calculateHashIdx(ivec3 cell_idx, ivec3 cell_dims, int cellCount) {
+__device__ int calculateHashIdx(ivec3 cell_idx, ivec3 cell_dims, int cellCount) {
     int i2 = ((cell_idx.x() % cell_dims.x()) + cell_dims.x()) % cell_dims.x();
     int j2 = ((cell_idx.y() % cell_dims.y()) + cell_dims.y()) % cell_dims.y();
     int k2 = ((cell_idx.z() % cell_dims.z()) + cell_dims.z()) % cell_dims.z();
     int flat_cell_idx = i2 * cell_dims.y() * cell_dims.z() + j2 * cell_dims.z() + k2;
     return flat_cell_idx;
-}*/
-// TODO fails if position is too negative
-__device__ int calculateHashIdx(ivec3 cell_idx, ivec3 cell_dims, int cellCount) {
-    int i2 = (cell_idx.x() + cell_dims.x()) % cell_dims.x();
-    int j2 = (cell_idx.y() + cell_dims.y()) % cell_dims.y();
-    int k2 = (cell_idx.z() + cell_dims.z()) % cell_dims.z();
-    int flat_cell_idx = i2 * cell_dims.y() * cell_dims.z() + j2 * cell_dims.z() + k2;
-    return flat_cell_idx;
-}
-
-__global__ void createLinkedCells(Saiga::ArrayView<Particle> particles, std::pair<int, int>* cell_list, int* particle_list, ivec3 cell_dims, int cellCount, float cellSize) {
-    Saiga::CUDA::ThreadInfo<> ti;
-    if (ti.thread_id < particles.size()) {
-        ivec3 cell_idx = calculateCellIdx(particles[ti.thread_id].position, cellSize);
-        int flat_cell_idx = calculateHashIdx(cell_idx, cell_dims, cellCount);
-        particle_list[ti.thread_id] = atomicExch(&cell_list[flat_cell_idx].first, ti.thread_id);
-    }
 }
 
 __global__ void calculateHash(Saiga::ArrayView<Particle> particles, int* particle_hash, std::pair<int, int>* cell_list, int* particle_list, ivec3 cell_dims, int cellCount, float cellSize) {
@@ -1242,31 +1210,12 @@ __global__ void calculateHash(Saiga::ArrayView<Particle> particles, int* particl
     }
 }
 
-__global__ void createLinkedCellsOpti(Saiga::ArrayView<Particle> particles, int* particle_hash, std::pair<int, int>* cell_list, int* particle_list, ivec3 cell_dims, int cellCount, float cellSize) {
+__global__ void createLinkedCellsOptimized(Saiga::ArrayView<Particle> particles, int* particle_hash, std::pair<int, int>* cell_list, int* particle_list, ivec3 cell_dims, int cellCount, float cellSize) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id < particles.size()) {
         int flat_cell_idx = particle_hash[ti.thread_id];
-        //atomicMin(&cell_list[flat_cell_idx].first, ti.thread_id);
-        //atomicAdd(&cell_list[flat_cell_idx].second, 1);
-
-        // replace every
-        //int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
-        // with
-        //int end_idx = cell_list[neighbor_flat_idx].second + 1;
-
-        if (ti.thread_id > 0) {
-            if (flat_cell_idx != particle_hash[ti.thread_id - 1])
-                cell_list[flat_cell_idx].first = ti.thread_id;
-        } else {
-            cell_list[flat_cell_idx].first = ti.thread_id;
-        }
-
-        if (ti.thread_id < particles.size() - 1) {
-            if (flat_cell_idx != particle_hash[ti.thread_id + 1])
-                cell_list[flat_cell_idx].second = ti.thread_id;
-        } else {
-            cell_list[flat_cell_idx].second = ti.thread_id;
-        }
+        atomicMin(&cell_list[flat_cell_idx].first, ti.thread_id);
+        atomicAdd(&cell_list[flat_cell_idx].second, 1);
     }
 }
 
@@ -1282,17 +1231,6 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
 
         ivec3 cell_idx = calculateCellIdx(pa.predicted, cellSize); // actually pa.position but we only load predicted and its identical here
 
-        /*for (int x = -1; x <= 1; x++) {
-        //for (int x = -1; x <= 0; x++) {
-            for (int y = -1; y <= 1; y++) {
-                //    if (x == 0 && y > 0)
-                //        break;
-                for (int z = -1; z <= 1; z++) {
-                //    if (x == 0 && y == 0 && z > 0)
-                //        break;
-                }
-            }
-        }*/
         static const int X_CONSTS[14] = {-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 0, 0, 0, 0};
         static const int Y_CONSTS[14] = {-1,-1,-1, 0, 0, 0, 1, 1, 1,-1,-1,-1, 0, 0};
         static const int Z_CONSTS[14] = {-1, 0, 1,-1, 0, 1,-1, 0, 1,-1, 0, 1,-1, 0};
@@ -1305,7 +1243,7 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
             ivec3 neighbor_cell_idx = cell_idx + ivec3(x, y, z);
             int neighbor_flat_idx = calculateHashIdx(neighbor_cell_idx, cell_dims, cellCount);
             int neighbor_particle_idx = cell_list[neighbor_flat_idx].first;
-            int end_idx = cell_list[neighbor_flat_idx].second + 1;
+            int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
             for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
 
                 int rbIDb = particles[neighbor_particle_idx].rbID;
@@ -1396,7 +1334,7 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
                     ivec3 neighbor_cell_idx = cell_idx + ivec3(x, y, z);
                     int neighbor_flat_idx = calculateHashIdx(neighbor_cell_idx, cell_dims, cellCount);
                     int neighbor_particle_idx = cell_list[neighbor_flat_idx].first;
-                    int end_idx = cell_list[neighbor_flat_idx].second + 1;
+                    int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         //Particle pb = particles[neighbor_particle_idx];
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
@@ -1464,7 +1402,7 @@ __global__ void updateParticlesPBD2IteratorFluid(Saiga::ArrayView<Particle> part
                     ivec3 neighbor_cell_idx = cell_idx + ivec3(x, y, z);
                     int neighbor_flat_idx = calculateHashIdx(neighbor_cell_idx, cell_dims, cellCount);
                     int neighbor_particle_idx = cell_list[neighbor_flat_idx].first;
-                    int end_idx = cell_list[neighbor_flat_idx].second + 1;
+                    int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         int rbIDb = particles[neighbor_particle_idx].rbID;
                         if (rbIDb != -2)
@@ -1523,7 +1461,7 @@ __global__ void computeVorticityAndViscosity(float dt, Saiga::ArrayView<Particle
                     ivec3 neighbor_cell_idx = cell_idx + ivec3(x, y, z);
                     int neighbor_flat_idx = calculateHashIdx(neighbor_cell_idx, cell_dims, cellCount);
                     int neighbor_particle_idx = cell_list[neighbor_flat_idx].first;
-                    int end_idx = cell_list[neighbor_flat_idx].second + 1;
+                    int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         //Particle& pb = particles[neighbor_particle_idx];
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc1*>(&particles[neighbor_particle_idx].velocity), &pb);
@@ -1593,7 +1531,7 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
                     ivec3 neighbor_cell_idx = cell_idx + ivec3(x, y, z);
                     int neighbor_flat_idx = calculateHashIdx(neighbor_cell_idx, cell_dims, cellCount);
                     int neighbor_particle_idx = cell_list[neighbor_flat_idx].first;
-                    int end_idx = cell_list[neighbor_flat_idx].second + 1;
+                    int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         //Particle& pb = particles[neighbor_particle_idx];
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc3*>(&particles[neighbor_particle_idx].position), &pb);
@@ -1634,11 +1572,10 @@ void ParticleSystem::update(float dt) {
     last_dt = dt;
     if (physics_mode == 0) {      
         resetConstraintCounter<<<1, 32>>>(d_constraintCounter, d_constraintCounterWalls);
-        //resetConstraints<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_constraintList, maxConstraintNum, d_constraintCounter, d_constraintCounterWalls);
         //CUDA_SYNC_CHECK_ERROR();
 
         const unsigned int BLOCKS_CELLS = Saiga::CUDA::getBlockCount(cellCount, BLOCK_SIZE);
-        resetCellListOpti<<<BLOCKS_CELLS, BLOCK_SIZE>>>(d_cell_list, cellCount, particleCount);
+        resetCellListOptimized<<<BLOCKS_CELLS, BLOCK_SIZE>>>(d_cell_list, cellCount, particleCount);
         CUDA_SYNC_CHECK_ERROR();
 
         // moved up from previously after createConstraintWalls before iteration loop
@@ -1648,8 +1585,7 @@ void ParticleSystem::update(float dt) {
         CUDA_SYNC_CHECK_ERROR();
         thrust::sort_by_key(thrust::device_pointer_cast(d_particle_hash), thrust::device_pointer_cast(d_particle_hash) + particleCount, d_particles.device_begin());
 
-        createLinkedCellsOpti<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
-        //createLinkedCells<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
+        createLinkedCellsOptimized<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
         CUDA_SYNC_CHECK_ERROR();
 
         createConstraintParticlesLinkedCellsRigidBodiesFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize);
@@ -1673,7 +1609,6 @@ void ParticleSystem::update(float dt) {
             if (use_calculated_relax_p) {
                 calculatedRelaxP = 1 - pow(1 - calculatedRelaxP, 1.0/(i+1));
             }
-            // TODO N -> maxConstraintNum
             updateRigidBodies();
             solverPBDParticlesSDF<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relax_p, d_rigidBodies, mu_k, mu_s, mu_f);
 
@@ -1743,41 +1678,6 @@ __global__ void rayImpulse(Saiga::ArrayView<Particle> particles, Saiga::Ray ray,
     list[ti.thread_id].second = 0;
 }
 
-__global__ void rayInflate(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, thrust::pair<int, float> *list, int *rayHitCount, int min, bool inflate, float max_particle_radius) {
-    Saiga::CUDA::ThreadInfo<> ti;
-    if (ti.thread_id >= 1000)
-        return;
-    
-    if (ti.thread_id == 0) {
-        int idx = list[min].first;
-        if (inflate) {
-            if (particles[idx].radius * 2 > max_particle_radius)
-                return;
-            particles[idx].radius *= 2;
-            particles[idx].massinv /= 4;
-        } else {
-            particles[idx].radius /= 2;
-            particles[idx].massinv *= 4;
-        }
-    }
-    list[ti.thread_id].second = 0;
-}
-
-__global__ void rayRevert(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, thrust::pair<int, float> *list, int *rayHitCount, int min) {
-    Saiga::CUDA::ThreadInfo<> ti;
-    if (ti.thread_id >= 1000)
-        return;
-    
-    if (ti.thread_id == 0) {
-        int idx = list[min].first;
-        particles[idx].radius = 0.5; // TODO radius
-        particles[idx].velocity = {0,0,0};
-        particles[idx].d_momentum = {0,0,0};
-    }
-
-    list[ti.thread_id].second = 0;
-}
-
 __global__ void rayExplosion(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, thrust::pair<int, float> *list, int *rayHitCount, int min, bool explode, float explodeMult) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particles.size())
@@ -1795,61 +1695,6 @@ __global__ void rayExplosion(Saiga::ArrayView<Particle> particles, Saiga::Ray ra
     if (d < 4) {
         particle.velocity += 1.0 / (d) * dir * explodeMult;
         particle.d_momentum += 1.0 / (d) * dir * explodeMult;
-    }
-
-    list[ti.thread_id].second = 0;
-}
-
-__global__ void raySplit(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, thrust::pair<int, float> *list, int *rayHitCount, int min, int split_count) {
-    Saiga::CUDA::ThreadInfo<> ti;
-    if (ti.thread_id >= 1000)
-        return;
-
-    // TODO fix for fixed and different kinds of particles
-    
-    if (ti.thread_id == 0) {
-        Particle &particle = particles[list[min].first];
-        particle.radius /= 2;
-        // 5 pseudo random indices
-        float r = particle.radius;
-        int randIdx = min * 1117 % 757 + (int)list[min].first % 137 + *rayHitCount % 17;
-
-        for (int i = 0; i < split_count; i++) {
-            Particle &p = particles[(randIdx + i) % particles.size()];
-
-            // reuse the current particle
-            if (i == split_count - 1) {
-                p = particles[list[min].first];
-            }
-
-            // pseudo random offset
-            int x = p.position[0] * 10.0 + p.velocity[0] * 100.0 + p.velocity[0] * 100.0;
-            int y = p.position[1] * 10.0 + p.velocity[1] * 100.0 + p.velocity[1] * 100.0;
-            int z = p.position[2] * 10.0 + p.velocity[2] * 100.0 + p.velocity[2] * 100.0;
-            vec3 randOffset = vec3{x % 17, y % 17, z % 17} / 17;
-            // min offset radius around original position
-            if (randOffset[0] >= 0)
-                randOffset[0] += r;
-            else
-                randOffset[0] -= r;
-            if (randOffset[1] >= 0)
-                randOffset[1] += r;
-            else
-                randOffset[1] -= r;
-            if (randOffset[2] >= 0)
-                randOffset[2] += r;
-            else
-                randOffset[2] -= r;
-            // normalize
-            randOffset /= 1 + r;
-            // set attributes
-            p.position = particle.position + randOffset * r * 2;
-            p.predicted = particle.predicted + randOffset * r * 2;
-            p.d_predicted = particle.d_predicted;
-            p.radius = r;
-            p.color = particle.color;
-            p.velocity = particle.velocity;
-        }
     }
 
     list[ti.thread_id].second = 0;
@@ -1878,8 +1723,6 @@ struct compare_predicate
 void ParticleSystem::ray(Saiga::Ray ray) {
     CUDA_SYNC_CHECK_ERROR();
     thrust::device_vector<thrust::pair<int, float>> d_vec(1000);
-    //thrust::device_vector<float> d_vec2(1000);
-    //resetCounter<<<1, 32>>>(d_rayHitCount);
     
     resetCounter<<<1, 32>>>(d_rayHitCount);
     CUDA_SYNC_CHECK_ERROR();
@@ -1898,17 +1741,6 @@ void ParticleSystem::ray(Saiga::Ray ray) {
         rayExplosion<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, true, explosion_force);
     } else if (action_mode == 3) {
         rayExplosion<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, false, explosion_force);
-    } else if (action_mode == 4) {
-        raySplit<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, split_count);
-    } else if (action_mode == 5) {
-        rayInflate<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, true, max_particle_radius);
-        /*CUDA_SYNC_CHECK_ERROR();
-        update(last_dt);
-        CUDA_SYNC_CHECK_ERROR();
-        rayRevert<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min);
-        CUDA_SYNC_CHECK_ERROR();*/
-    } else if (action_mode == 6) {
-        rayInflate<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, false, max_particle_radius);
     }
     CUDA_SYNC_CHECK_ERROR();
 }
