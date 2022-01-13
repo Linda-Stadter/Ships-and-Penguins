@@ -272,7 +272,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
     int count = 0;
     Saiga::AccelerationStructure::ObjectMedianBVH omBVH(triangles);
 
-    if (useSDF) {
+    if (true) {
         // 3d voxel grid
         vec3 size = bb.Size() / sampleDistance;
         const int xDim = ceil(size.x());
@@ -732,6 +732,17 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
 
     if (scenario > 2 && scenario < 8)
         initRigidBodies(distance, scenario);
+
+    if (scenario == 11) {
+        vec3 rot = {0,0,0};
+        ivec3 dim = {5,5,5};
+
+        color = {1.0, 0., .0, 1};
+
+        vec3 pos = {0, 10, 0};
+        int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color);
+        particleCountRB += dim.x() * dim.y() * dim.z();
+    }
 
     if (scenario > 2 && scenario != 6 && scenario != 7 && scenario < 7)
         deactivateNonRB<<<BLOCKS, BLOCK_SIZE>>>(d_particles);
@@ -1354,6 +1365,21 @@ __device__ __host__ vec3 W_spiky(vec3 r, float h, float epsilon) {
     return -45.f / (M_PI * h6) * hd2;
 }
 
+inline __device__ __host__ float range(float value, float min, float max) {
+    return value = value < min ? min : (value > max ? max : value);
+}
+
+__device__ float calculate_spray(float C_density, float rho0inv) {
+    //float min_density = (1.0f * m) * rho0inv - 1.0;
+    float min_density = 5 * rho0inv - 1.0; // 1 * W_poly(0, h) + 3 * W_poly(0.5, h)
+    float max_density = 7.5 * rho0inv - 1.0; // 1 * W_poly(0, h) + 9 * W_poly(0.5, h) // 1.57 + x * 0.66; x= 3: 3.5, 6: 5.5, 9: 7.5
+    //float spray = 1.0f - (C_density + 4.0f) / 2.0f;
+    float non_spray = (C_density - min_density) / (max_density - min_density);
+    non_spray = range(non_spray, 0, 1);
+    float spray = 1.0f - (non_spray * non_spray);
+    return spray;
+}
+
 __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize, float h, float epsilon_spiky, float omega_lambda_relax, float particleRadius) {
     Saiga::CUDA::ThreadInfo<> ti;
 
@@ -1405,6 +1431,16 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
         float lambda1 = spiky_sum.norm();
         lambda1 *= lambda1;
         float lambda = -C_density / (lambda1 + lambda2 + omega_lambda_relax);
+
+        // gischt
+        float spray = calculate_spray(C_density, rho0inv);
+        vec4 water_color = {0, 0, 0.8, 1};
+        vec4 spray_color = {1, 1, 1, 1};
+        float old_spray = particles[ti.thread_id].color[0];
+        float new_spray = spray;
+        if (new_spray < old_spray)
+            new_spray = old_spray * 0.995;
+        particles[ti.thread_id].color = (1.0f - new_spray) * water_color + new_spray * spray_color;
 
         particles[ti.thread_id].lambda = lambda;
     }
@@ -1485,6 +1521,7 @@ __global__ void computeVorticityAndViscosity(float dt, Saiga::ArrayView<Particle
         if (rbIDa != -2)
             return;
 
+
         ivec3 cell_idx = calculate_cell_idx(pa.position, cellSize); // actually pa.position but we only load predicted and its identical here
 
         vec3 curl = {0, 0, 0};
@@ -1530,7 +1567,18 @@ __global__ void computeVorticityAndViscosity(float dt, Saiga::ArrayView<Particle
     }
 }
 
-__global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> particles, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize, float h, float epsilon_spiky, float epsilon_vorticity) {
+__device__ vec3 calculate_wind(vec3 pa, vec3 pb, vec3 wind_direction, float wind_speed) {
+    float h = 1;
+    vec3 UP = {0, 1, 0};
+    vec3 d_p = pa - pb;
+    if (d_p.norm() > h) // || d_p.x() * d_p.x() < 1e-5 || d_p.y() * d_p.y() < 1e-5)
+        return {0,0,0};
+    float wind_force = d_p.dot(wind_direction) * d_p.dot(UP); //d_p.x() * d_p.y();
+    float wpoly = W_poly6((d_p).norm(), h) * wind_force;
+    return UP * wind_force * wind_speed/10.0f;
+}
+
+__global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> particles, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize, float h, float epsilon_spiky, float epsilon_vorticity, vec3 wind_direction, float wind_speed) {
     Saiga::CUDA::ThreadInfo<> ti;
 
     if (ti.thread_id < particles.size()) {
@@ -1543,9 +1591,12 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
         if (rbIDa != -2)
             return;
 
+
         ivec3 cell_idx = calculate_cell_idx(pa.position, cellSize); // actually pa.position but we only load predicted and its identical here
 
         vec3 curl_gradient = {0, 0, 0};
+
+        vec3 d_velocity = {0, 0, 0};
 
         for (int x = -1; x <= 1; x++) {
             for (int y = -1; y <= 1; y++) {
@@ -1560,10 +1611,16 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
                         int rbIDb = pb.rbID;
                         if (rbIDb != -2)
                             continue;
+
+                        if (neighbor_particle_idx == ti.thread_id)
+                            continue;
                             
                         // 6 f
                         // vorticity
                         curl_gradient += pa.sdf.norm() * W_spiky(pa.position - pb.position, h, epsilon_spiky);
+
+                        // wind and waves
+                        d_velocity += calculate_wind(pa.position, pb.position, wind_direction, wind_speed);
                     }
                 }
             }
@@ -1571,10 +1628,13 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
 
         vec3 force = epsilon_vorticity * curl_gradient.normalized().cross(pa.sdf);
         // apply vorticity force
-        particles[ti.thread_id].velocity += force * 1.0f; // pa.massinv; // TODO mass von material abhaengig machen nicht aus particle lesen
-
+        d_velocity += force * 1.0f; // pa.massinv; // TODO mass von material abhaengig machen nicht aus particle lesen
         // apply viscosity
-        particles[ti.thread_id].velocity += pa.d_momentum;
+        d_velocity += pa.d_momentum;
+
+
+        // update velocity
+        particles[ti.thread_id].velocity += d_velocity;
 
         // reset curl for sdf
         particles[ti.thread_id].sdf = {0,0,0};
@@ -1656,7 +1716,7 @@ void ParticleSystem::update(float dt) {
 
         computeVorticityAndViscosity<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, c_viscosity);
         CUDA_SYNC_CHECK_ERROR();
-        applyVorticityAndViscosity<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, epsilon_vorticity);
+        applyVorticityAndViscosity<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, epsilon_vorticity, wind_direction, wind_speed);
         CUDA_SYNC_CHECK_ERROR();
         
         cudaDeviceSynchronize();

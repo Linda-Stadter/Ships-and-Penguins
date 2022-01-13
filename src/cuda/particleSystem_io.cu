@@ -16,9 +16,6 @@ void ParticleSystem::renderGUI()
     if(ImGui::Begin("ParticleSystem"))
     {
         ImGui::InputFloat3("gravity", &gravity[0]);
-        ImGui::InputFloat("elast", &elast_const);
-        ImGui::InputFloat("spring", &spring_const);
-        ImGui::InputFloat("frict", &frict_const);
 
         ImGui::InputInt("solverIterations", &solverIterations);
         ImGui::Checkbox("useCalculatedRelaxP", &useCalculatedRelaxP);
@@ -47,8 +44,10 @@ void ParticleSystem::renderGUI()
         ImGui::InputFloat("c_viscosity", &c_viscosity);
         ImGui::InputFloat("epsilon_vorticity", &epsilon_vorticity);
 
+        ImGui::InputFloat3("wind_direction", &wind_direction[0]);
+        ImGui::InputFloat("wind_speed", &wind_speed);
+
         ImGui::Combo("physics", &physicsMode, physics, std::size(physics));
-        ImGui::Checkbox("use SDF", &useSDF); // 4.4
         ImGui::Combo("mouse action", &actionMode, actions, std::size(actions));
         ImGui::ColorEdit4("color", &color[0]);
         ImGui::InputInt("explosionForce", &explosionForce);

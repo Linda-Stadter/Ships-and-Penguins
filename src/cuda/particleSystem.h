@@ -41,7 +41,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     ArrayView<Saiga::Plane> d_walls;
 
     float particleRenderRadius = 0.5;
-    float particleRadiusWater = 0.5;
+    float particleRadiusWater = 0.3;
     float particleRadiusCloth = 0.5;
     
     int particleCountRB = 0;
@@ -75,13 +75,10 @@ class SAIGA_ALIGN(16) ParticleSystem
     int *d_particleIdLookup;
 
     vec3 gravity = {0, -9.81, 0};
-    float elast_const = 0.2;
-    float spring_const = 800;
-    float frict_const = 0.1;
 
-    float dampV = 0.995;
+    float dampV = 1.0; //0.995;
     float relaxP = 0.25;
-    int solverIterations = 4;
+    int solverIterations = 2;
     bool useCalculatedRelaxP = true;
 
     bool testBool = true;
@@ -89,7 +86,7 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     float mu_k = 0.1;
     float mu_s = 0.8;
-    float mu_f = 0.5;
+    float mu_f = 0.0;
 
     float h = 1.0;
     float epsilon_spiky = 1e-5;
@@ -103,6 +100,9 @@ class SAIGA_ALIGN(16) ParticleSystem
     float epsilon_vorticity = 0.007;
 
     float particleRadiusRestDensity = 0.25;
+
+    vec3 wind_direction = {-1, 0, 0};
+    float wind_speed = 0.7;
 
     float lastDt = 0;
 
@@ -129,10 +129,6 @@ class SAIGA_ALIGN(16) ParticleSystem
     int* d_particle_list;
     std::pair<int, int>* d_cell_list;
     int* d_particle_hash;
-
-
-    // 4.4
-    bool useSDF = true;
 
     // debug
     unsigned long steps = 0;
