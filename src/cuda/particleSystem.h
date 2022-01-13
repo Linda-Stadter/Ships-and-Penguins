@@ -76,13 +76,13 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     vec3 gravity = {0, -9.81, 0};
 
-    float dampV = 1.0; //0.995;
-    float relaxP = 0.25;
-    int solverIterations = 2;
-    bool useCalculatedRelaxP = true;
+    float damp_v = 1.0; //0.995;
+    float relax_p = 0.25;
+    int solver_iterations = 2;
+    bool use_calculated_relax_p = true;
 
-    bool testBool = true;
-    float testFloat = 0.05;
+    bool test_bool = true;
+    float test_float = 0.05;
 
     float mu_k = 0.1;
     float mu_s = 0.8;
@@ -99,32 +99,32 @@ class SAIGA_ALIGN(16) ParticleSystem
     float c_viscosity = 0.01;
     float epsilon_vorticity = 0.007;
 
-    float particleRadiusRestDensity = 0.25;
+    float particle_radius_rest_density = 0.25;
 
     vec3 wind_direction = {-1, 0, 0};
     float wind_speed = 0.7;
 
-    float lastDt = 0;
+    float last_dt = 0;
 
     int *d_rayHitCount;
 
     // GUI
     const char* physics[1] = {"Physics"};
-    int physicsMode = 0;
+    int physics_mode = 0;
     const char* actions[7] = {"Color", "Impulse", "Explode", "Implode", "Split", "Inflate", "Deflate"};
-    int actionMode = 0;
+    int action_mode = 0;
 
     // action parameters
     vec4 color = {1,1,0,1};
-    int explosionForce = 25;
-    int splitCount = 10;
+    int explosion_force = 25;
+    int split_count = 10;
 
     vec3 boxDim;
     vec3 boxMin;
     ivec3 cellDim;
     int cellCount;
 
-    float maxParticleRadius = 0.5;
+    float max_particle_radius = 0.5;
     float cellSize;
     int* d_particle_list;
     std::pair<int, int>* d_cell_list;

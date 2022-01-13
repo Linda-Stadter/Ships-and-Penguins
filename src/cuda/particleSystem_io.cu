@@ -17,17 +17,17 @@ void ParticleSystem::renderGUI()
     {
         ImGui::InputFloat3("gravity", &gravity[0]);
 
-        ImGui::InputInt("solverIterations", &solverIterations);
-        ImGui::Checkbox("useCalculatedRelaxP", &useCalculatedRelaxP);
-        ImGui::InputFloat("relax", &relaxP);
-        ImGui::InputFloat("damp", &dampV);
+        ImGui::InputInt("solver_iterations", &solver_iterations);
+        ImGui::Checkbox("use_calculated_relax_p", &use_calculated_relax_p);
+        ImGui::InputFloat("relax", &relax_p);
+        ImGui::InputFloat("damp", &damp_v);
 
-        ImGui::InputFloat("particleRadiusRestDensity", &particleRadiusRestDensity);
+        ImGui::InputFloat("particle_radius_rest_density", &particle_radius_rest_density);
         ImGui::InputFloat("particleRadiusWater", &particleRadiusWater);
         ImGui::InputFloat("particleRadiusCloth", &particleRadiusCloth);
 
-        ImGui::Checkbox("test bool", &testBool);
-        ImGui::InputFloat("test float", &testFloat);
+        ImGui::Checkbox("test bool", &test_bool);
+        ImGui::InputFloat("test float", &test_float);
 
         ImGui::InputFloat("kinetic friction", &mu_k);
         ImGui::InputFloat("static friction", &mu_s);
@@ -47,11 +47,11 @@ void ParticleSystem::renderGUI()
         ImGui::InputFloat3("wind_direction", &wind_direction[0]);
         ImGui::InputFloat("wind_speed", &wind_speed);
 
-        ImGui::Combo("physics", &physicsMode, physics, std::size(physics));
-        ImGui::Combo("mouse action", &actionMode, actions, std::size(actions));
+        ImGui::Combo("physics", &physics_mode, physics, std::size(physics));
+        ImGui::Combo("mouse action", &action_mode, actions, std::size(actions));
         ImGui::ColorEdit4("color", &color[0]);
-        ImGui::InputInt("explosionForce", &explosionForce);
-        ImGui::InputInt("splitCount", &splitCount);
+        ImGui::InputInt("explosion_force", &explosion_force);
+        ImGui::InputInt("split_count", &split_count);
 
         ImGui::Separator();
     }

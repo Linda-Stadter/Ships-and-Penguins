@@ -26,7 +26,7 @@ ParticleSystem::ParticleSystem(int _particleCount, vec3 _boxMin, vec3 _boxDim)
     
     checkError(cudaMalloc((void **)&d_rigidBodies, sizeof(RigidBody) * maxRigidBodyCount));
 
-    float minCellSize = 2.0 * maxParticleRadius;
+    float minCellSize = 2.0 * max_particle_radius;
     cellSize = minCellSize;
     cellDim = {int(ceil(boxDim[0] / cellSize)), int(ceil(boxDim[1] / cellSize)), int(ceil(boxDim[2] / cellSize))};
     cellCount = cellDim[0] * cellDim[1] * cellDim[2];
