@@ -1330,17 +1330,6 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
     }
 }
 
-// remove unused constraints
-/*struct remove_predicate_constraints
-{
-  __host__ __device__
-  bool operator()(const int x)
-  {
-    return x == -1;
-  }
-};*/
-
-
 // 6.2
 __device__ __host__ float W_poly6(float r, float h) {
     if (r > h)
@@ -1667,16 +1656,6 @@ void ParticleSystem::update(float dt) {
 
         createConstraintWalls<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls);
         CUDA_SYNC_CHECK_ERROR();
-
-        
-        // TODO constraints
-        //thrust::device_ptr<int> d = thrust::device_pointer_cast(d_constraintList);  
-        
-        //thrust::fill(d, d+N, 2);
-        //int N = thrust::remove_if(d, d + maxConstraintNum, remove_predicate_constraints()) - d;
-
-        //CUDA_SYNC_CHECK_ERROR();
-        // solver Iterations: project Constraints
 
         float w_poly_d_q = W_poly6(delta_q * h, h);
 
