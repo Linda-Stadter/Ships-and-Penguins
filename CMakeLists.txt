@@ -93,6 +93,7 @@ list(APPEND AGPHYS_CUDA_FLAGS "-use_fast_math")
 list(APPEND AGPHYS_CUDA_FLAGS "--expt-relaxed-constexpr")
 list(APPEND AGPHYS_CUDA_FLAGS "-Xcudafe=--diag_suppress=esa_on_defaulted_function_ignored")
 list(APPEND AGPHYS_CUDA_FLAGS "-Xcompiler=-march=native")
+list(APPEND AGPHYS_CUDA_FLAGS "--allow-unsupported-compiler")
 
 set(AGPHYS_CUDA_ARCH 52-virtual 75)
 
@@ -130,3 +131,8 @@ set_target_properties( ${PROG_NAME}
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
+if(MSVC)
+    set_target_properties(saiga_core saiga_cuda saiga_opengl saiga_vision glfw glog assimp
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif()
