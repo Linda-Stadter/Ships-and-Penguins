@@ -23,8 +23,8 @@ class Glfw_Camera : public Controllable_Camera<camera_t>
                              //            GLFW_KEY_DOWN,
                              //            GLFW_KEY_LEFT,
                              //            GLFW_KEY_RIGHT,
-                             GLFW_KEY_LEFT_SHIFT, GLFW_KEY_SPACE};
-        this->mousemap    = {GLFW_MOUSE_BUTTON_3, GLFW_MOUSE_BUTTON_1};
+                             GLFW_KEY_LEFT_SHIFT, GLFW_KEY_SPACE, GLFW_KEY_LEFT_ALT};
+        this->mousemap    = {GLFW_MOUSE_BUTTON_1, GLFW_MOUSE_BUTTON_3};
     }
 };
 

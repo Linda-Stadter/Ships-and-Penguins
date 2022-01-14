@@ -77,6 +77,7 @@ class Controllable_Camera : public CameraController, public camera_t
         Right    = 3,
         Fast     = 4,
         Up       = 5,
+        Down     = 6,
     };
 };
 
@@ -209,7 +210,8 @@ void Controllable_Camera<camera_t>::update(float delta)
         }
 
         vec3 trans  = delta * speed * FORWARD * vec3(0, 0, -1) + delta * speed * RIGHT * vec3(1, 0, 0);
-        vec3 transg = vec3(0, 1, 0) * (delta * speed * keyboard.getMappedKeyState(Up, keyboardmap));
+        int UP = keyboard.getMappedKeyState(Up, keyboardmap) - keyboard.getMappedKeyState(Down, keyboardmap);
+        vec3 transg = vec3(0, 1, 0) * (delta * speed * UP);
         this->translateLocal(trans);
         this->translateGlobal(transg);
     }
