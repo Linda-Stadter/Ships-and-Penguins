@@ -1,0 +1,21 @@
+[submodule "submodules/eigen"]
+	path = submodules/eigen
+	url = https://gitlab.com/libeigen/eigen.git
+[submodule "submodules/libpng"]
+	path = submodules/libpng
+	url = ../../glennrp/libpng.git
+[submodule "submodules/assimp"]
+	path = submodules/assimp
+	url = ../../assimp/assimp.git
+[submodule "submodules/googletest"]
+	path = submodules/googletest
+	url = ../../google/googletest.git
+[submodule "submodules/glfw"]
+	path = submodules/glfw
+	url = ../../glfw/glfw.git
+[submodule "submodules/zlib"]
+	path = submodules/zlib
+	url = ../../darglein/zlib.git
+[submodule "submodules/glog"]
+	path = submodules/glog
+	url = ../../google/glog.git
