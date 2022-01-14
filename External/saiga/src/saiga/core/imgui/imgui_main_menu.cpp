@@ -143,6 +143,7 @@ void EditorLayout::PlaceWindows()
 {
     for (auto& windows : initial_layout)
     {
+        if(windows.second>=node_map.size()) continue;
         ImGui::DockBuilderDockWindow(windows.first.c_str(), node_map[windows.second]);
     }
 }
