@@ -13,7 +13,7 @@ set(SRCDIR "C:/Users/linda/Documents/AGPhys Projekt/ships/External/saiga/submodu
 set(BINDIR "C:/Users/linda/Documents/AGPhys Projekt/ships/build/External/saiga/submodules/libpng")
 
 set(AWK "AWK-NOTFOUND")
-set(CMAKE_C_COMPILER "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x64/cl.exe")
+set(CMAKE_C_COMPILER "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x86/cl.exe")
 set(CMAKE_C_FLAGS /DWIN32 /D_WINDOWS)
 set(INCDIR "C:/Users/linda/Documents/AGPhys Projekt/ships/build/External/saiga/submodules/libpng")
 set(PNG_PREFIX "")
