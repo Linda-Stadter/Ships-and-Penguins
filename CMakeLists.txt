@@ -123,7 +123,10 @@ add_subdirectory(src)
 
 if(MSVC)
     #visual studio working dir
-    set_target_properties(${PROG_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    #set_target_properties(${PROG_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    set_target_properties(saiga_core saiga_cuda saiga_opengl saiga_vision glfw glog assimp
+       PROPERTIES
+       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()
 
 #copies executable to top level source tree
@@ -131,8 +134,3 @@ set_target_properties( ${PROG_NAME}
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
-if(MSVC)
-    set_target_properties(saiga_core saiga_cuda saiga_opengl saiga_vision glfw glog assimp
-        PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
-endif()

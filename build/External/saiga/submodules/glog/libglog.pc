@@ -1,0 +1,10 @@
+prefix=C:/Program Files (x86)/agphys
+exec_prefix=C:/Program Files (x86)/agphys/bin
+libdir=C:/Program Files (x86)/agphys/lib
+includedir=C:/Program Files (x86)/agphys/include
+
+Name: libglog
+Description: Google Log (glog) C++ logging framework
+Version: 0.6.0
+Libs: -L${libdir} -lglog
+Cflags: -I${includedir}
