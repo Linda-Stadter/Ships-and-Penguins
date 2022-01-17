@@ -1,7 +1,0 @@
-CMakeLists.txt.user
-build*/
-*.ptx
-cmake/SAIGAConfig.cmake
-create.sh
-cmake-build-*/
-.idea/
