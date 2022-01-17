@@ -44,6 +44,10 @@ void ParticleSystem::renderGUI()
         ImGui::InputFloat("c_viscosity", &c_viscosity);
         ImGui::InputFloat("epsilon_vorticity", &epsilon_vorticity);
 
+        ImGui::InputFloat("wave_number", &wave_number);
+        ImGui::InputFloat("phase_speed", &phase_speed);
+        ImGui::InputFloat("steepness", &steepness);
+
         ImGui::InputFloat3("wind_direction", &wind_direction[0]);
         ImGui::InputFloat("wind_speed", &wind_speed);
 

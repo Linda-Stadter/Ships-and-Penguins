@@ -19,6 +19,9 @@
 #include "saiga/core/geometry/AccelerationStructure.h"
 #include "saiga/core/geometry/intersection.h"
 
+// time
+float t = 0;
+
 void ParticleSystem::setDevicePtr(void* particleVbo) {
     d_particles = ArrayView<Particle>((Particle*) particleVbo, particleCount);
 }
@@ -61,6 +64,9 @@ __global__ void updateParticlesPBD2(float dt, Saiga::ArrayView<Particle>particle
     if (ti.thread_id >= particles.size())
         return;
     Particle &p = particles[ti.thread_id];
+
+    if (p.rbID == -4)
+        return;
 
     if (!p.fixed) {
         //p.predicted += relax_p * p.d_predicted;
@@ -107,6 +113,10 @@ __global__ void resetParticles(int x, int z, vec3 corner, float distance, Saiga:
     p.lambda = 0;
 
     p.id = ti.thread_id; // cloth
+
+    if (rbID == -4) {
+        p.relative = p.position;
+    }
 }
 
 __global__ void initParticles(int startIdx, int count, int x, int z, vec3 corner, float distance, Saiga::ArrayView<Particle>particles, float randInitMul, float particleRenderRadius, int rbID, vec4 color, bool fixed=false, float mass=1.0) {
@@ -638,6 +648,10 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         color = {0.1f, 0.2f, 0.8f, 1.f};
         rbID = -2; // fluid
     }
+    if (scenario == 12) { // trochoidal test scenario
+        color ={0.1f, 0.2f, 0.8f, 1.f};
+        rbID = -4; // trochoidal particles
+    }
     resetParticles<<<BLOCKS, BLOCK_SIZE>>>(x, z, corner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color);
     CUDA_SYNC_CHECK_ERROR();
 
@@ -880,6 +894,9 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
     Particle &pb = particles[idxB];
 
     if (pa.rbID == -2 && pb.rbID == -2) // deactivate for fluid
+        return;
+
+    if (pa.rbID == -4 && pb.rbID == -4) // deactivate for trochoidal particles
         return;
 
     ParticleCalc pa_copy;
@@ -1493,6 +1510,53 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
     }
 }
 
+__device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_length, float steepness, float t) {
+    direction = normalize(direction);
+    float x = gridPoint[0];
+    float y = gridPoint[1];
+    float z = gridPoint[2];
+
+    float k = 2 * M_PI / wave_length;
+    // compute correct speed of waves in deep water
+    float c = sqrt(9.8 / k);
+    // amplitude
+    float a = steepness / k;
+
+    float f = k * (direction[0] * x + direction[1] * z - c * t);
+    float xOffset = direction[0] * a * sin(f);
+    float yOffset = -a * cos(f);
+    float zOffset = direction[1] * a * sin(f);
+
+    return vec3(xOffset, yOffset, zOffset);
+}
+
+__global__ void updateTrochoidalParticles(Saiga::ArrayView<Particle> d_particles, float wave_length, float phase_speed, float steepness, float t) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id < d_particles.size()) {
+        if (d_particles[ti.thread_id].rbID != -4) {
+            return;
+        }
+
+        vec3 position = d_particles[ti.thread_id].relative;
+
+        // add different trochoidal waves
+        // main wave
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(1, 0), wave_length, steepness, t);
+        // small waves
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.2, 0.8), wave_length * 0.8, steepness * 0.8, t);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.8, 0.2), wave_length * 0.5, steepness * 0.95, t);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.5, 0.5), wave_length * 0.7, steepness * 0.9, t);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.1, 0.9), wave_length * 1.2, steepness * 1.1, t);
+        // huge waves
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(1, 0), wave_length * 2, steepness * 1.5, t);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.1, 0.9), wave_length * 1.9, steepness * 1.2, t);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.9, 0.1), wave_length * 2.1, steepness * 1.1, t);
+
+        d_particles[ti.thread_id].position = position;
+        d_particles[ti.thread_id].predicted = position;
+    }
+}
+
 void ParticleSystem::update(float dt) {
     last_dt = dt;
     if (physics_mode == 0) {      
@@ -1538,6 +1602,7 @@ void ParticleSystem::update(float dt) {
         constraintsShapeMatchingRB();
 
         updateParticlesPBD2<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, relax_p);
+        updateTrochoidalParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, wave_number, phase_speed, steepness, dt * steps);
 
         computeVorticityAndViscosity<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, c_viscosity);
         applyVorticityAndViscosity<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, epsilon_vorticity, wind_direction, wind_speed);

@@ -31,7 +31,7 @@ struct SAIGA_ALIGN(16) Particle
 
     // 4.0
     //int rbID;
-    vec3 relative;
+    vec3 relative; // used for fixed position of trochoidal wave circle center
 
     // 4.4
     //vec3 sdf; // used for both sdf and curl

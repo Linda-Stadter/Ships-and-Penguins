@@ -108,6 +108,12 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     int *d_rayHitCount;
 
+    // wave paramenters
+    float wave_number = 20.0;
+    float phase_speed = 0.2;
+    float steepness = 0.1;
+
+
     // GUI
     const char* physics[1] = {"Physics"};
     int physics_mode = 0;

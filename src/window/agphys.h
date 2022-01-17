@@ -59,7 +59,9 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     vec3 corner = {-10, 15, -10};
     vec3 boxDim = {40, 40, 40};
 
-    const char* scenarios[12] = {"N Particles", "10K Particles", "1M Particles", "Rigid Bodies (Cuboids)", "Rigid Bodies (Cuboids + Teapod)", "Rigid Bodies (SDF demo)", "Particles + Rigid Bodies (Cuboids + Teapod)", "Fluid (dam break + Obstacle)", "Fluid (dam break demo)", "Fluid (double dam break demo)", "Cloth test", "Project Test"};
+    const char* scenarios[13] = {"N Particles", "10K Particles", "1M Particles", "Rigid Bodies (Cuboids)", "Rigid Bodies (Cuboids + Teapod)", 
+                                 "Rigid Bodies (SDF demo)", "Particles + Rigid Bodies (Cuboids + Teapod)", "Fluid (dam break + Obstacle)", 
+                                 "Fluid (dam break demo)", "Fluid (double dam break demo)", "Cloth test", "Project Test", "Trochoidal Waves"};
     int scenario = 11;
 
 
