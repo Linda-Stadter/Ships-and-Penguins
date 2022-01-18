@@ -80,6 +80,52 @@ __global__ void updateParticlesPBD2(float dt, Saiga::ArrayView<Particle>particle
     p.lambda = 0;
 }
 
+// a bit redundant
+__global__ void resetParticlesStartEnd(Saiga::ArrayView<Particle> d_particles, Saiga::ArrayView<vec3> d_gradient, int startId, int endId, int xMax, int zMax, vec3 corner, float distance, int matId, vec4 color, float particleRenderRadius) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    int id = ti.thread_id;
+
+    if (id < d_particles.size() && id >= startId && id < endId) {
+        Particle &p = d_particles[id];
+
+        int y = (id - startId) / (xMax * zMax);
+        int z = ((id - startId) - (y * xMax * zMax)) / xMax;
+        int x = ((id - startId) - (y * xMax * zMax)) % xMax;
+        float offset = d_particles[id].radius;
+
+        vec3 random_offset = vec3((id % 3) * 0.01, (id % 7) * 0.01, (id % 11) * 0.01);
+
+        p.position = vec3(x, y, z) * distance + corner + vec3(offset, offset, offset) + random_offset;
+
+        p.velocity = {0, 0, 0};
+        p.massinv = 1.0/1.0;
+        p.predicted = p.position;
+        // 2.3
+        p.color = color;
+        p.radius = particleRenderRadius;
+
+        p.fixed = false;
+
+        // 4.0
+        p.rbID = matId;
+        p.relative ={0, 0, 0};
+        p.sdf ={0, 0, 0};
+        if (matId == -4) {
+            p.sdf = d_gradient[id - startId];
+        } 
+
+        // 6.0
+        p.lambda = 0;
+
+        p.id = ti.thread_id; // cloth
+
+        if (matId == -4) {
+            p.relative = p.position;
+        }
+    }
+
+}
+
 __global__ void resetParticles(int x, int z, vec3 corner, float distance, Saiga::ArrayView<Particle>particles, float randInitMul, float particleRenderRadius, int rbID, vec4 color) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particles.size())
@@ -641,6 +687,106 @@ __global__ void deactivateNonRB(Saiga::ArrayView<Particle> particles) {
     }
 }
 
+std::vector<vec3> computeGradient(vec3 voxelGridEnd, int*** grid) {
+    std::vector<vec3> gradients;
+    std::vector<int> magnitudes;
+    for (int x = 0; x < voxelGridEnd[0]; x += 1) {
+        for (int y = 0; y < voxelGridEnd[1]; y+= 1) {
+            for (int z = 0; z < voxelGridEnd[2]; z+= 1) {
+
+                if (grid[x][y][z] == 0) {
+                    continue;
+                }
+                vec3 grad = vec3(0, 0, 0);
+
+                int left = 0;
+                if (x > 0) {
+                    left = grid[x-1][y][z];
+                }
+                int top = 0;
+                if (y > 0) {
+                    top = grid[x][y-1][z];
+                }
+                int back = 0;
+                if (z > 0) {
+                    back = grid[x][y][z-1];
+                }
+
+                int right = 0;
+                if (x < voxelGridEnd[0]-1) {
+                    right = grid[x+1][y][z];
+                }
+                int bottom = 0;
+                if (y < voxelGridEnd[1]-1) {
+                    bottom = grid[x][y+1][z];
+                }
+                int front = 0;
+                if (z < voxelGridEnd[2]-1) {
+                    front = grid[x][y][z+1];
+                }
+
+                // using central differencing
+                grad[0] += (left-right);
+                grad[1] += (top-bottom);
+                grad[2] += (back-front);
+
+                grad = normalize(grad);
+                if (grad == vec3(0, 0, 0)) {
+                    grad = vec3(0, 1, 0);
+                }
+                grad *= grid[x][y][z];
+
+                gradients.push_back(grad * (-1));
+            }
+        }
+    }
+
+
+    return gradients;
+}
+
+void computeSDF(vec3 voxelGridEnd, int*** grid) {
+
+    // dynamic programming algorithm
+
+    // go forward
+    for (int x = 0; x < voxelGridEnd[0]; x += 1) {
+        for (int y = 0; y < voxelGridEnd[1]; y+= 1) {
+            for (int z = 0; z < voxelGridEnd[2]; z+= 1) {
+                if (grid[x][y][z] == 0) {
+                    continue;
+                }
+                if (x == 0 || y == 0 || z == 0) {
+                    continue;
+                }
+
+                // look at -1 neighbors (already updated)
+                int minNeighbor = std::min({grid[x-1][y][z], grid[x][y-1][z], grid[x][y][z-1]});
+                grid[x][y][z] = minNeighbor + 1;
+            }
+        }
+    }
+
+    // go backward and overwrite wrong values in-place
+    for (int x = voxelGridEnd[0]-1; x >= 0; x -= 1) {
+        for (int y = voxelGridEnd[1]-1; y >= 0; y -= 1) {
+            for (int z = voxelGridEnd[2]-1; z >= 0; z -= 1) {
+                if (grid[x][y][z] == 0) {
+                    continue;
+                }
+                if (x == voxelGridEnd[0]-1 || y == voxelGridEnd[1]-1 || z == voxelGridEnd[2]-1) {
+                    grid[x][y][z] = 1;
+                    continue;
+                }
+
+                // look at +1 neighbors (already updated)
+                int minNeighbor =  std::min({grid[x+1][y][z], grid[x][y+1][z], grid[x][y][z+1]});
+                grid[x][y][z] = min(grid[x][y][z], minNeighbor + 1);
+            }
+        }
+    }
+}
+
 void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario) {
     int rbID = -1; // free particles
     vec4 color = {0.0f, 1.0f, 0.0f, 1.f};
@@ -652,8 +798,47 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         color ={0.1f, 0.2f, 0.8f, 1.f};
         rbID = -4; // trochoidal particles
     }
-    resetParticles<<<BLOCKS, BLOCK_SIZE>>>(x, z, corner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color);
-    CUDA_SYNC_CHECK_ERROR();
+
+    if (scenario == 13) {
+        wave_number = 5;
+        wind_speed = 0;
+        ivec3 trochDim = ivec3(20, 20, 8);
+        int startId = 0;
+        int endId = trochDim[0] * trochDim[1] * trochDim[2];
+        vec3 voxelGridEnd = vec3(20, 20, 8);
+        int ***grid3D = new int**[endId];
+        for (int i = 0; i < 20; i++) {
+            grid3D[i] = new int*[20];
+            for (int j = 0; j < 20; j++) {
+                grid3D[i][j] = new int[8];
+                for (int h = 0; h < 8; h++) {
+                    grid3D[i][j][h] = 1;
+                }
+            }
+        }
+        computeSDF(voxelGridEnd, grid3D);
+        std::vector<vec3> gradients = computeGradient(voxelGridEnd, grid3D);
+
+        vec3* gradPtr;
+        cudaMalloc((void **)&gradPtr, sizeof(vec3) * trochDim[0] * trochDim[1] * trochDim[2]);
+        cudaMemcpy(gradPtr, gradients.data(), sizeof(vec3) * trochDim[0] * trochDim[1] * trochDim[2], cudaMemcpyHostToDevice);
+        ArrayView<vec3> d_gradient = make_ArrayView(gradPtr, trochDim[0] * trochDim[1] * trochDim[2]);
+
+        // adds trochoidal particles
+        resetParticlesStartEnd<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_gradient, startId, endId, x, z, corner, 0.6, -4, color, 0.3);
+        CUDA_SYNC_CHECK_ERROR();
+        startId = endId;
+        endId = 20 * 20 * 40 * 2;
+
+        // adds fluid particles
+        resetParticlesStartEnd<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_gradient, startId, endId, x, z, corner + vec3(x, 0, 0), distance, -2, color, 0.5);
+        CUDA_SYNC_CHECK_ERROR();
+    }
+    else {
+        resetParticles<<<BLOCKS, BLOCK_SIZE>>>(x, z, corner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color);
+        CUDA_SYNC_CHECK_ERROR();
+    }
+
 
     if (scenario == 9) {
         initParticles<<<BLOCKS, BLOCK_SIZE>>>(0, 20*20*20, 20, 20, {-20, 0, -20}, distance, d_particles, randInitMul, particleRenderRadius, -2, {0.f, 0.f, 1.f, .1f}, false);
@@ -911,7 +1096,7 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
     float d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
     
-    if (pa.rbID >= 0 || pb.rbID >= 0) {
+    if (pa.rbID >= 0 || pb.rbID >= 0 || pa.rbID == -4 || pb.rbID == -4) {
         vec3 sdf1 = pa.sdf;
         vec3 sdf2 = pb.sdf;
         mat3 R;
@@ -935,6 +1120,16 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
             d = sdf2.norm();
             n = -normalize(sdf2);
             R = rigidBodies[pb.rbID].A;
+        } else if (pa.rbID == -4) {
+            //printf("%f %f %f\n", sdf1[0], sdf1[1], sdf1[2]);
+            d = sdf1.norm();
+            n = normalize(sdf1);
+            R = Mat3::Identity().cast<float>();
+        } else if (pb.rbID == -4) {
+            //printf("%f %f %f\n", sdf2[0], sdf2[1], sdf2[2]);
+            d = sdf2.norm();
+            n = -normalize(sdf2);
+            R = Mat3::Identity().cast<float>();
         }
         n = R * -n;
         if (d <= 1.0) {
