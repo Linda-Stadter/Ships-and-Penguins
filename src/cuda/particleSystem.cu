@@ -95,7 +95,7 @@ __global__ void resetParticlesStartEnd(Saiga::ArrayView<Particle> d_particles, S
 
         vec3 random_offset = vec3((id % 3) * 0.01, (id % 7) * 0.01, (id % 11) * 0.01);
 
-        p.position = vec3(x, y, z) * distance + corner + vec3(offset, offset, offset) + random_offset;
+        p.position = vec3(x, y, z) * distance + corner + random_offset;
 
         p.velocity = {0, 0, 0};
         p.massinv = 1.0/1.0;
@@ -804,8 +804,11 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     }
 
     if (scenario == 13) {
+        // scene parameters
         wave_number = 5;
+        steepness = 0.2;
         wind_speed = 0;
+
         ivec3 trochDim = ivec3(20, 20, 8);
         int startId = 0;
         int endId = trochDim[0] * trochDim[1] * trochDim[2];
@@ -820,6 +823,8 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
                 }
             }
         }
+
+        // compute sdf for trochoidal ocean "block"
         computeSDF(voxelGridEnd, grid3D);
         std::vector<vec3> gradients = computeGradient(voxelGridEnd, grid3D);
 
@@ -829,8 +834,9 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         ArrayView<vec3> d_gradient = make_ArrayView(gradPtr, trochDim[0] * trochDim[1] * trochDim[2]);
 
         // adds trochoidal particles
-        resetParticlesStartEnd<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_gradient, startId, endId, x, z, vec3(-10, -1, -4), 0.4, -4, color, 0.3);
+        resetParticlesStartEnd<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_gradient, startId, endId, x, z, vec3(-10, 0, -4), 0.4, -4, color, 0.3);
         CUDA_SYNC_CHECK_ERROR();
+
         startId = endId;
         endId = 20 * 20 * 40 * 2;
 
@@ -1719,7 +1725,7 @@ __device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_
     // compute correct speed of waves in deep water
     float c = sqrt(9.8 / k);
     // amplitude
-    float a = steepness / k;
+    float a = (steepness / 10 * y) / k;
 
     float f = k * (direction[0] * x + direction[1] * z - c * t);
     float xOffset = direction[0] * a * sin(f);
