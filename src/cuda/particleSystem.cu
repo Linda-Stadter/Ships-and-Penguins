@@ -108,8 +108,8 @@ __global__ void resetParticlesStartEnd(Saiga::ArrayView<Particle> d_particles, S
 
         // 4.0
         p.rbID = matId;
-        p.relative ={0, 0, 0};
-        p.sdf ={0, 0, 0};
+        p.relative = {0, 0, 0};
+        p.sdf = {0, 0, 0};
         if (matId == -4) {
             p.sdf = d_gradient[id - startId];
         } 
@@ -690,9 +690,12 @@ __global__ void deactivateNonRB(Saiga::ArrayView<Particle> particles) {
 std::vector<vec3> computeGradient(vec3 voxelGridEnd, int*** grid) {
     std::vector<vec3> gradients;
     std::vector<int> magnitudes;
-    for (int x = 0; x < voxelGridEnd[0]; x += 1) {
-        for (int y = 0; y < voxelGridEnd[1]; y+= 1) {
-            for (int z = 0; z < voxelGridEnd[2]; z+= 1) {
+
+    // This order must be consistent with the spawn order
+    // (Otherwise output gradient in a 3d array)
+    for (int y = 0; y < voxelGridEnd[1]; y+= 1) {
+        for (int z = 0; z < voxelGridEnd[2]; z+= 1) {
+            for (int x = 0; x < voxelGridEnd[0]; x += 1) {
 
                 if (grid[x][y][z] == 0) {
                     continue;
@@ -736,6 +739,7 @@ std::vector<vec3> computeGradient(vec3 voxelGridEnd, int*** grid) {
                 }
                 grad *= grid[x][y][z];
 
+                // gradient output as a normal
                 gradients.push_back(grad * (-1));
             }
         }
@@ -805,13 +809,13 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         ivec3 trochDim = ivec3(20, 20, 8);
         int startId = 0;
         int endId = trochDim[0] * trochDim[1] * trochDim[2];
-        vec3 voxelGridEnd = vec3(20, 20, 8);
+        vec3 voxelGridEnd = vec3(trochDim[0], trochDim[1], trochDim[2]);
         int ***grid3D = new int**[endId];
-        for (int i = 0; i < 20; i++) {
-            grid3D[i] = new int*[20];
-            for (int j = 0; j < 20; j++) {
-                grid3D[i][j] = new int[8];
-                for (int h = 0; h < 8; h++) {
+        for (int i = 0; i < trochDim[0]; i++) {
+            grid3D[i] = new int*[trochDim[1]];
+            for (int j = 0; j < trochDim[1]; j++) {
+                grid3D[i][j] = new int[trochDim[2]];
+                for (int h = 0; h < trochDim[2]; h++) {
                     grid3D[i][j][h] = 1;
                 }
             }
@@ -825,7 +829,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         ArrayView<vec3> d_gradient = make_ArrayView(gradPtr, trochDim[0] * trochDim[1] * trochDim[2]);
 
         // adds trochoidal particles
-        resetParticlesStartEnd<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_gradient, startId, endId, x, z, corner, 0.6, -4, color, 0.3);
+        resetParticlesStartEnd<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_gradient, startId, endId, x, z, vec3(-10, -1, -4), 0.4, -4, color, 0.3);
         CUDA_SYNC_CHECK_ERROR();
         startId = endId;
         endId = 20 * 20 * 40 * 2;

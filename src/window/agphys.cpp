@@ -136,7 +136,7 @@ void Agphys::loadScenario()
         xCount = 20;
         zCount = 20;
         corner = {-20, 0, -10};
-        boxDim = {40, 80, 20};
+        boxDim = {40, 80, 30};
     }
     else {
         numberParticles = 100000;
