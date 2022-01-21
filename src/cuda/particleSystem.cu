@@ -80,6 +80,60 @@ __global__ void updateParticlesPBD2(float dt, Saiga::ArrayView<Particle>particle
     p.lambda = 0;
 }
 
+__global__ void resetOcean(Saiga::ArrayView<Particle> d_particles, int xMax, int zMax, vec3 corner, vec4 color, vec3 fluidDim) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    int id = ti.thread_id;
+
+    if (id < d_particles.size()) {
+        Particle &p = d_particles[id];
+
+        int y = id / (xMax * zMax);
+        int z = (id - (y * xMax * zMax)) / xMax;
+        int x = (id - (y * xMax * zMax)) % xMax;
+        float offset = d_particles[id].radius;
+
+        // for fluids
+        int matId = -2;
+        float distance = 0.5;
+        float particleRenderRadius = 0.5;
+
+
+        vec3 random_offset = vec3((id % 3) * 0.01, (id % 7) * 0.01, (id % 11) * 0.01);
+
+        vec3 position = vec3(x, y, z) * distance + corner;
+        // for trochoidals
+        if ((position[0] < -fluidDim[0]/2) || (position[2] < -fluidDim[2]/2) || (position[0] > fluidDim[0]/2) || (position[2] > fluidDim[2]/2)) {
+            matId = -4;
+            particleRenderRadius = 0.3;
+        }
+        p.position = position + random_offset;
+        p.velocity ={0, 0, 0};
+        p.massinv = 1.0/1.0;
+        p.predicted = p.position;
+        // 2.3
+        p.color = color;
+        p.radius = particleRenderRadius;
+
+        p.fixed = false;
+
+        // 4.0
+        p.rbID = matId;
+        p.relative ={0, 0, 0};
+        p.sdf ={0, 0, 0};
+
+
+        // 6.0
+        p.lambda = 0;
+
+        p.id = ti.thread_id; // cloth
+
+        if (matId == -4) {
+            p.relative = p.position;
+        }
+    }
+
+}
+
 // a bit redundant
 __global__ void resetParticlesStartEnd(Saiga::ArrayView<Particle> d_particles, Saiga::ArrayView<vec3> d_gradient, int startId, int endId, int xMax, int zMax, vec3 corner, float distance, int matId, vec4 color, float particleRenderRadius) {
     Saiga::CUDA::ThreadInfo<> ti;
@@ -843,6 +897,18 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         // adds fluid particles
         resetParticlesStartEnd<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_gradient, startId, endId, x, z, corner + vec3(x, 0, 0), distance, -2, color, 0.5);
         CUDA_SYNC_CHECK_ERROR();
+    }
+    else if (scenario == 14) {
+        // scene parameters
+        wave_number = 3.5;
+        steepness = 0.6;
+        wind_speed = 0;
+        vec3 fluidDim ={60, 80, 60};
+
+        // adds trochoidal particles
+        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, 180, 180, corner, color, fluidDim);
+        CUDA_SYNC_CHECK_ERROR();
+
     }
     else {
         resetParticles<<<BLOCKS, BLOCK_SIZE>>>(x, z, corner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color);
