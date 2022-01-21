@@ -1106,7 +1106,7 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
     float d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
     
-    if (pa.rbID >= 0 || pb.rbID >= 0 || pa.rbID == -4 || pb.rbID == -4) {
+    if (pa.rbID >= 0 || pb.rbID >= 0) {
         vec3 sdf1 = pa.sdf;
         vec3 sdf2 = pb.sdf;
         mat3 R;
@@ -1130,16 +1130,6 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
             d = sdf2.norm();
             n = -normalize(sdf2);
             R = rigidBodies[pb.rbID].A;
-        } else if (pa.rbID == -4) {
-            //printf("%f %f %f\n", sdf1[0], sdf1[1], sdf1[2]);
-            d = sdf1.norm();
-            n = normalize(sdf1);
-            R = Mat3::Identity().cast<float>();
-        } else if (pb.rbID == -4) {
-            //printf("%f %f %f\n", sdf2[0], sdf2[1], sdf2[2]);
-            d = sdf2.norm();
-            n = -normalize(sdf2);
-            R = Mat3::Identity().cast<float>();
         }
         n = R * -n;
         if (d <= 1.0) {
@@ -1521,7 +1511,7 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
                     int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
-                        int rbIDb = particles[neighbor_particle_idx].rbID;
+                        //int rbIDb = particles[neighbor_particle_idx].rbID;
                         
                         vec3 d_p = pa.predicted - pb.predicted;
 
@@ -1580,7 +1570,7 @@ __global__ void updateParticlesPBD2IteratorFluid(Saiga::ArrayView<Particle> part
                     int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         int rbIDb = particles[neighbor_particle_idx].rbID;
-                        if (rbIDb != -2)
+                        if (!(rbIDb == -2 || rbIDb == -4))
                             continue;
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
 
@@ -1633,7 +1623,7 @@ __global__ void computeVorticityAndViscosity(float dt, Saiga::ArrayView<Particle
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc1*>(&particles[neighbor_particle_idx].velocity), &pb);
                         int rbIDb = pb.rbID;
-                        if (rbIDb != -2)
+                        if (!(rbIDb == -2 || rbIDb == -4))
                             continue;
 
                         // vorticity
@@ -1690,7 +1680,7 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc3*>(&particles[neighbor_particle_idx].position), &pb);
                         int rbIDb = pb.rbID;
-                        if (rbIDb != -2)
+                        if (!(rbIDb == -2 || rbIDb == -4))
                             continue;
                         if (neighbor_particle_idx == ti.thread_id)
                             continue;
