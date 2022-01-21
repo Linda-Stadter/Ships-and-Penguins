@@ -809,7 +809,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         steepness = 0.2;
         wind_speed = 0;
 
-        ivec3 trochDim = ivec3(20, 20, 8);
+        ivec3 trochDim = ivec3(20, 8, 20);
         int startId = 0;
         int endId = trochDim[0] * trochDim[1] * trochDim[2];
         vec3 voxelGridEnd = vec3(trochDim[0], trochDim[1], trochDim[2]);
