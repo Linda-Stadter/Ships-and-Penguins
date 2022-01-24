@@ -35,10 +35,13 @@ __global__ void updateParticlesPBD1_radius(float dt, vec3 gravity, Saiga::ArrayV
     if (p.fixed)
         return;
 
+    /*
+    // quite expensive memory access
     if (p.rbID == -2)
         p.radius = particleRadiusWater;
     else if (p.rbID == -3)
         p.radius = particleRadiusCloth;
+    */
 
     vec3 newVelocity = p.velocity + dt * gravity;
     // dampVelocities
@@ -95,7 +98,7 @@ __global__ void resetOcean(Saiga::ArrayView<Particle> d_particles, int xMax, int
         // for fluids
         int matId = -2;
         float distance = 0.5;
-        float particleRenderRadius = 0.5;
+        float particleRenderRadius = 0.3;
 
 
         vec3 random_offset = vec3((id % 3) * 0.01, (id % 7) * 0.01, (id % 11) * 0.01);
@@ -104,7 +107,6 @@ __global__ void resetOcean(Saiga::ArrayView<Particle> d_particles, int xMax, int
         // for trochoidals
         if ((position[0] < -fluidDim[0]/2) || (position[2] < -fluidDim[2]/2) || (position[0] > fluidDim[0]/2) || (position[2] > fluidDim[2]/2)) {
             matId = -4;
-            particleRenderRadius = 0.3;
         }
         p.position = position + random_offset;
         p.velocity ={0, 0, 0};
@@ -902,11 +904,15 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         // scene parameters
         wave_number = 3.5;
         steepness = 0.6;
-        wind_speed = 0;
+        wind_direction = {-1.0, 0.0, -1.0};
+        wind_speed = 0.7;
+        solver_iterations = 1;
+        c_viscosity = 0.02;
+        epsilon_vorticity = 0.001;
         vec3 fluidDim ={60, 80, 60};
 
         // adds trochoidal particles
-        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, 180, 180, corner, color, fluidDim);
+        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, 200, 200, corner, color, fluidDim);
         CUDA_SYNC_CHECK_ERROR();
 
     }
@@ -1474,6 +1480,9 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[ti.thread_id]), &pa);
         int rbIDa = particles[ti.thread_id].rbID;
 
+        if (rbIDa == -4)
+            return;
+
         ivec3 cell_idx = calculateCellIdx(pa.predicted, cellSize); // actually pa.position but we only load predicted and its identical here
 
         static const int X_CONSTS[14] = {-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 0, 0, 0, 0};
@@ -1492,6 +1501,8 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
             for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
 
                 int rbIDb = particles[neighbor_particle_idx].rbID;
+                if (rbIDb == -4)
+                    continue;
                 if ( (rbIDa == -1 || rbIDb == -1 || rbIDa != rbIDb) &&
                         (i != 13 || neighbor_particle_idx > ti.thread_id) ) {
                     Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
@@ -1779,14 +1790,22 @@ __device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_
 
     float k = 2 * M_PI / wave_length;
     // compute correct speed of waves in deep water
-    float c = sqrt(9.8 / k);
+    //float c = sqrt(9.8 / k);
+    float c = 1.0;
     // amplitude
     float a = (steepness / 10 * y) / k;
 
     float f = k * (direction[0] * x + direction[1] * z - c * t);
-    float xOffset = direction[0] * a * sin(f);
-    float yOffset = -a * cos(f);
-    float zOffset = direction[1] * a * sin(f);
+
+    //float sin_f = sinf(f);
+    //float cos_f = cosf(f);
+    float sin_f;
+    float cos_f;
+    sincosf(f, &sin_f, &cos_f);
+
+    float xOffset = direction[0] * a * sin_f;
+    float yOffset = -a * cos_f;
+    float zOffset = direction[1] * a * sin_f;
 
     return vec3(xOffset, yOffset, zOffset);
 }

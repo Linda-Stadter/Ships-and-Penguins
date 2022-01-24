@@ -139,7 +139,7 @@ void Agphys::loadScenario()
         corner ={-20, 0, -10};
         boxDim ={40, 80, 30};
     } else if (scenario == 14) {
-        numberParticles = 180 * 180 * 5;
+        numberParticles = 200 * 200 * 5;
         distance = 1;
         xCount = 20;
         zCount = 20;
@@ -268,6 +268,7 @@ void Agphys::update(float dt)
         
         // profiling
         #undef CUDA_PROFILING
+        //#define CUDA_PROFILING
         #ifdef CUDA_PROFILING
         if (steps == 300)
             cudaProfilerStart();
