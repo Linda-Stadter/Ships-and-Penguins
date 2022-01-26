@@ -153,7 +153,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     const unsigned int BLOCKS     = Saiga::CUDA::getBlockCount(particleCount, BLOCK_SIZE);
 
     void update(float dt);
-    void reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario);
+    void reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario, vec3 fluidDim);
     void ray(Saiga::Ray ray);
     void setDevicePtr(void* ptr);
 

@@ -857,7 +857,7 @@ void computeSDF(vec3 voxelGridEnd, int*** grid) {
     }
 }
 
-void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario) {
+void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario, vec3 fluidDim) {
     int rbID = -1; // free particles
     vec4 color = {0.0f, 1.0f, 0.0f, 1.f};
     if (scenario >= 7) {
@@ -919,10 +919,9 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         solver_iterations = 1;
         c_viscosity = 0.02;
         epsilon_vorticity = 0.001;
-        vec3 fluidDim ={60, 80, 60};
 
         // adds trochoidal particles
-        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, 200, 200, corner, color, fluidDim);
+        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, x, z, corner, color, fluidDim);
         CUDA_SYNC_CHECK_ERROR();
 
     }
@@ -1802,9 +1801,9 @@ __device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_
     float z = gridPoint[2];
 
     float k = 2 * M_PI / wave_length;
-    // compute correct speed of waves in deep water
-    //float c = sqrt(9.8 / k);
-    float c = 1.0;
+    // compute speed of waves
+    float c = 9.8 / (k * 2.5);
+
     // amplitude
     float a = (steepness / 10 * y) / k;
 

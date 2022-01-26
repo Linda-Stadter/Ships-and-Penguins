@@ -62,6 +62,7 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     int zCount = 20;
     vec3 corner = {-10, 15, -10};
     vec3 boxDim = {40, 40, 40};
+    vec3 fluidDim ={60, 80, 60};
 
     const char* scenarios[15] = {"N Particles", "10K Particles", "1M Particles", "Rigid Bodies (Cuboids)", "Rigid Bodies (Cuboids + Teapod)", 
                                  "Rigid Bodies (SDF demo)", "Particles + Rigid Bodies (Cuboids + Teapod)", "Fluid (dam break + Obstacle)", 
