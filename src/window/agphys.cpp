@@ -145,7 +145,7 @@ void Agphys::loadScenario()
         vec3 trochoidalDim = {30, height, 30}; // width of one side in -x, +x, -z and +z direction in particles
         
         // computation of dimensions  
-        int trochoidalParticles = (fluidDim[0] * trochoidalDim[0] * 2 + fluidDim[2] * trochoidalDim[2] * 2 + trochoidalDim[0] * trochoidalDim[2] * 4) * height;// (120 * 30 * 4 + 30 * 30 * 4) * 5;
+        int trochoidalParticles = (fluidDim[0] * trochoidalDim[0] * 2 + fluidDim[2] * trochoidalDim[2] * 2 + trochoidalDim[0] * trochoidalDim[2] * 4) * height;
         int fluidParticles = fluidDim[0] * fluidDim[2] * height;
         numberParticles = trochoidalParticles + fluidParticles;
         distance = 0.5;
