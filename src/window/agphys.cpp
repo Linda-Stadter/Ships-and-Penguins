@@ -139,12 +139,27 @@ void Agphys::loadScenario()
         corner ={-20, 0, -10};
         boxDim ={40, 80, 30};
     } else if (scenario == 14) {
-        numberParticles = 200 * 200 * 5;
-        distance = 1;
-        xCount = 20;
-        zCount = 20;
-        corner ={-45, 0, -45};
-        boxDim ={62, 80, 62};
+        // change to resize ocean
+        float height = 5;
+        fluidDim = {150, height, 150}; // width in x and z direction in particles
+        vec3 trochoidalDim = {30, height, 30}; // width of one side in -x, +x, -z and +z direction in particles
+        
+        // computation of dimensions  
+        int trochoidalParticles = (fluidDim[0] * trochoidalDim[0] * 2 + fluidDim[2] * trochoidalDim[2] * 2 + trochoidalDim[0] * trochoidalDim[2] * 4) * height;// (120 * 30 * 4 + 30 * 30 * 4) * 5;
+        int fluidParticles = fluidDim[0] * fluidDim[2] * height;
+        numberParticles = trochoidalParticles + fluidParticles;
+        distance = 0.5;
+        xCount = (int) (fluidDim[0] + trochoidalDim[0] * 2);
+        zCount = (int) (fluidDim[2] + trochoidalDim[2] * 2);
+        
+        boxDim = {fluidDim[0]*distance, 80, fluidDim[2]*distance}; // in coordinates
+        fluidDim = boxDim; // in coordinates
+        corner = {-boxDim[0]/2, 0, -boxDim[2]/2}; // in coordinates
+        corner -= vec3(trochoidalDim[0] * distance, 0, trochoidalDim[2] * distance);
+        
+        // add border blend transistion
+        vec3 border = {2, 0, 2};
+        boxDim += border;
     } else {
         numberParticles = 100000;
         distance = 0.99;
@@ -345,7 +360,7 @@ void Agphys::resetParticles()
 {
     map();
     // reset particles
-    particleSystem->reset(xCount, zCount, corner, distance, randInitMul, scenario);
+    particleSystem->reset(xCount, zCount, corner, distance, randInitMul, scenario, fluidDim);
     unmap();
 }
 
