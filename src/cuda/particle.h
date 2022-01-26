@@ -78,4 +78,5 @@ struct SAIGA_ALIGN(16) RigidBody
     int particleCount;
     vec3 originOfMass;
     mat3 A; // used for both A and later result Q
+    mat3 initA;
 };

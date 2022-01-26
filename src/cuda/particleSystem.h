@@ -54,7 +54,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     void updateRigidBodies();
 
     int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color);
-    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass);
+    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass, float scaling, float particleRadius);
 
     int *d_constraintCounter;
     int *d_constraintList;
@@ -112,6 +112,11 @@ class SAIGA_ALIGN(16) ParticleSystem
     float wave_number = 20.0;
     float phase_speed = 0.2;
     float steepness = 0.1;
+
+    // controls
+    float control_forward = 0;
+    float control_rotate = 0;
+    void controlRigidBody(int rbID, float forward, float rotate, float dt);
 
 
     // GUI

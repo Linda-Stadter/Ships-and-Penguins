@@ -109,7 +109,7 @@ void Agphys::keyPressed(int key, int scancode, int mods)
         case GLFW_KEY_R:
             resetParticles();
             break;
-        case GLFW_KEY_H:
+        case GLFW_KEY_K:
             pause = !pause;
             break;
         case GLFW_KEY_J:

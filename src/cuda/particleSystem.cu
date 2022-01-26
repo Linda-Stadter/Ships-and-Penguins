@@ -265,7 +265,7 @@ __global__ void initCuboidParticles(Saiga::ArrayView<Particle> particles, int id
         return;
     
     mat3 rotMat;
-    rotMat = Eigen::AngleAxisf(rot.x(), vec3::UnitZ())
+    rotMat = Eigen::AngleAxisf(rot.x(), vec3::UnitX())
         * Eigen::AngleAxisf(rot.y(), vec3::UnitY())
         * Eigen::AngleAxisf(rot.z(), vec3::UnitZ());
     
@@ -330,7 +330,7 @@ __global__ void initCuboidParticles(Saiga::ArrayView<Particle> particles, int id
     rigidBodies[id].particleCount = count;
 }
 
-__global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles, int id, vec3 pos, vec3 sdf, vec4 color, int particleCountRB, RigidBody *rigidBodies, bool fixed=false, float mass=1.0) {
+__global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles, int id, vec3 pos, vec3 sdf, vec4 color, int particleCountRB, RigidBody *rigidBodies, bool fixed=false, float mass=1.0, float particleRadius=0.5) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > 0)
         return;
@@ -343,6 +343,8 @@ __global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles
 
     particles[particleCountRB].fixed = fixed;
     particles[particleCountRB].massinv = 1.0f/mass;
+
+    particles[particleCountRB].radius = particleRadius;
 
     // 4.4
     particles[particleCountRB].sdf = sdf;
@@ -526,7 +528,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
 }
 
 // 4.4
-int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed=false, float mass=1.0) {    
+int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed=false, float mass=1.0, float scaling=1.0, float particleRadius=0.5) {    
     vec3 min = {0,0,0};
     int count = 0;
     float sampleDistance = 1.0;
@@ -614,10 +616,10 @@ int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, 
                     vec3 ori = min + sampleDistance * ivec3{x, y, z}.cast<float>();
                     if (voxel[z][y][x].first) {
                         count++;
-                        float scaling = 1.0f;
+                        //float scaling = 0.5f;
                         vec3 position = pos + ori*(scaling / sampleDistance);
                         vec3 sdf = (float)voxel[z][y][x].first * normalize(voxel[z][y][x].second);
-                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, fixed, mass);
+                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, fixed, mass, particleRadius);
                     }
                 }
             }
@@ -706,6 +708,14 @@ __global__ void resetRigidBodyComplete(RigidBody *rigidBodies, int maxRigidBodyC
     rb.particleCount = 0;
     rb.originOfMass = {0,0,0};
     rb.A = mat3::Zero().cast<float>();
+}
+
+__global__ void initRigidBodiesRotation(RigidBody *rigidBodies, int rigidBodyCount) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id >= rigidBodyCount)
+        return;
+    RigidBody &rb = rigidBodies[ti.thread_id];
+    rb.initA = rb.A;
 }
 
 void ParticleSystem::constraintsShapeMatchingRB() {
@@ -1003,14 +1013,14 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     if (scenario > 2 && scenario < 8)
         initRigidBodies(distance, scenario);
 
-    if (scenario == 11) {
+    if (scenario == 11 || scenario == 14) {
         vec3 rot = {0,0,0};
         ivec3 dim = {5,5,5};
 
         color = {1.0, 0., .0, 1};
 
         vec3 pos = {0, 10, 0};
-        int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color);
+        int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
         particleCountRB += dim.x() * dim.y() * dim.z();
     }
 
@@ -1025,6 +1035,9 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     CUDA_SYNC_CHECK_ERROR();
     initRigidBodyParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies);
     CUDA_SYNC_CHECK_ERROR();
+
+    updateRigidBodies();
+    initRigidBodiesRotation<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
 
     resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
@@ -1172,8 +1185,8 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
     Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[idxB]), &pb_copy);
 
     // TODO mass von material abhaengig machen nicht aus particle lesen
-    float m1 = 1.0f; //pa.massinv;
-    float m2 = 1.0f; //pb.massinv;
+    float m1 = pa.massinv;
+    float m2 = pb.massinv;
 
     float d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
@@ -1271,7 +1284,7 @@ __global__ void solverPBDWalls(Saiga::ArrayView<Particle> particles, Saiga::Arra
         return;
 
     // TODO mass von material abhaengig machen nicht aus particle lesen
-    float m1 = 1.0f; //p.massinv;
+    float m1 = p.massinv;
     float m2 = 0;
     float d = -collideSpherePlane(p.radius, p.predicted, w);
     //float d = -wall.sphereOverlap(particle.predicted, particle.radius);
@@ -1326,8 +1339,8 @@ __global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstr
     Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[idxB]), &pb_copy);
 
     // TODO mass von material abhaengig machen nicht aus particle lesen
-    float m1 = 1.0f; //pa.massinv;
-    float m2 = 1.0f; //pb.massinv;
+    float m1 = pa.massinv;
+    float m2 = pb.massinv;
 
     float d = collideSphereSphere(constraints[ti.thread_id].dist, 0, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
@@ -1772,7 +1785,7 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
         }
         vec3 force = epsilon_vorticity * curl_gradient.normalized().cross(pa.sdf);
         // apply vorticity force
-        d_velocity += force * 1.0f; // pa.massinv; // TODO mass von material abhaengig machen nicht aus particle lesen
+        d_velocity += force * pa.massinv; // TODO mass von material abhaengig machen nicht aus particle lesen
         // apply viscosity
         d_velocity += pa.d_momentum;
         // update velocity
@@ -1879,7 +1892,13 @@ void ParticleSystem::update(float dt) {
             CUDA_SYNC_CHECK_ERROR();
         }
 
-        constraintsShapeMatchingRB();
+        //constraintsShapeMatchingRB
+        //constraintsShapeMatchingRB();
+
+        updateRigidBodies();
+        controlRigidBody(0, control_forward, control_rotate, dt);
+        resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
+        CUDA_SYNC_CHECK_ERROR();
 
         updateParticlesPBD2<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, relax_p);
         updateTrochoidalParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, wave_number, phase_speed, steepness, dt * steps);
@@ -1891,6 +1910,59 @@ void ParticleSystem::update(float dt) {
         cudaDeviceSynchronize();
     }
     steps += 1;
+}
+
+__device__ float stabilize(float rot, float center, float stabilize, float max) {
+    float new_rot = rot * (1 - stabilize) + center * stabilize;
+    if (new_rot > max)
+        new_rot = max;
+    if (new_rot < -max)
+        new_rot = -max;
+    return new_rot - rot;
+}
+
+__device__ float normalizeRotation(float rot) {
+    if (rot > M_PI)
+        rot = rot - 2 * M_PI;
+    if (rot < -M_PI)
+        rot = rot + 2 * M_PI;
+    return rot;
+}
+
+__device__ void normalizeRotation(vec3 rot) {
+    rot.x() = normalizeRotation(rot.x());
+    rot.y() = normalizeRotation(rot.y());
+    rot.z() = normalizeRotation(rot.z());
+}
+
+__global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies, int rbID, float forward, float rotate) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id > 0)
+        return;
+    vec3 rot = rigidBodies[rbID].A.eulerAngles(0, 1, 2);
+    vec3 initRot = rigidBodies[rbID].initA.eulerAngles(0, 1, 2);
+    vec3 relRot = rot - initRot;
+
+    normalizeRotation(relRot);
+
+    rot.y() += rotate * 0.001;    
+    //rot.x() += stabilize(relRot.x(), 0, 0.0001, M_PI/4.0);
+    //rot.z() += stabilize(relRot.z(), 0, 0.0001, M_PI/4.0);
+    
+    normalizeRotation(rot);
+
+    mat3 rotMat;
+    rotMat = Eigen::AngleAxisf(rot.x(), vec3::UnitX())
+        * Eigen::AngleAxisf(rot.y(), vec3::UnitY())
+        * Eigen::AngleAxisf(rot.z(), vec3::UnitZ());
+    rigidBodies[rbID].A = rotMat;
+
+    vec3 direction = {cosf(rot.y()), 0, sinf(rot.y())};
+    rigidBodies[rbID].originOfMass += direction * forward * 0.01;
+}
+
+void ParticleSystem::controlRigidBody(int rbID, float forward, float rotate, float dt){
+    moveRigidBody<<<1, 32>>>(d_particles, particleCountRB, d_rigidBodies, rbID, forward, rotate);
 }
 
 // 2.3 Ray

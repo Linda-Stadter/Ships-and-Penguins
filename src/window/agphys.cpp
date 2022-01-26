@@ -6,6 +6,8 @@
 #include "saiga/opengl/shader/shaderLoader.h"
 #include "saiga/cuda/cudaTimer.h"
 
+#include "saiga/core/util/keyboard.h"
+
 #include "cuda_profiler_api.h"
 
 #include "cuda_runtime.h"
@@ -261,6 +263,9 @@ void Agphys::update(float dt)
 
     if (pause) return;
 
+    // controls
+    updateControls(dt);
+
     map();
     float t;
     {
@@ -370,4 +375,34 @@ void VertexBuffer<Particle>::setVertexAttributes()
     // color
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)(4 * sizeof(GLfloat)));
     //#endif
+}
+
+
+void Agphys::updateControls(float delta)
+{
+    //if (input)
+    //{
+        particleSystem->control_forward = keyboard.getMappedKeyState(0, keyboardmap) - keyboard.getMappedKeyState(1, keyboardmap);
+        particleSystem->control_rotate = keyboard.getMappedKeyState(2, keyboardmap) - keyboard.getMappedKeyState(3, keyboardmap);
+        
+        /*int RIGHT = keyboard.getMappedKeyState(Right, keyboardmap) - keyboard.getMappedKeyState(Left, keyboardmap);
+
+        float speed;
+        if (keyboard.getMappedKeyState(Fast, keyboardmap))
+        {
+            speed = movementSpeedFast;
+        }
+        else
+        {
+            speed = movementSpeed;
+        }
+
+        vec3 trans  = delta * speed * FORWARD * vec3(0, 0, -1) + delta * speed * RIGHT * vec3(1, 0, 0);
+        int UP = keyboard.getMappedKeyState(Up, keyboardmap) - keyboard.getMappedKeyState(Down, keyboardmap);
+        vec3 transg = vec3(0, 1, 0) * (delta * speed * UP);
+        this->translateLocal(trans);
+        this->translateGlobal(transg);
+    }
+    this->calculateModel();
+    this->updateFromModel();*/
 }

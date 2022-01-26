@@ -48,6 +48,10 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     void keyPressed(int key, int scancode, int mods) override;
     void mousePressed(int key, int x, int y) override;
 
+    // controls
+    void updateControls(float delta);
+    std::vector<int> keyboardmap = {GLFW_KEY_T, GLFW_KEY_G, GLFW_KEY_F, GLFW_KEY_H};
+
    private:
     unsigned int steps = 0;
 
