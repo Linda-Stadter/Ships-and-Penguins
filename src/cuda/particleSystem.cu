@@ -83,18 +83,16 @@ __global__ void updateParticlesPBD2(float dt, Saiga::ArrayView<Particle>particle
     p.lambda = 0;
 }
 
-__global__ void resetOcean(Saiga::ArrayView<Particle> d_particles, int xMax, int zMax, vec3 corner, vec4 color, vec3 fluidDim) {
+__global__ void resetOcean(Saiga::ArrayView<Particle> d_particles, int startId, int endId, int xMax, int zMax, vec3 corner, vec4 color, vec3 fluidDim) {
     Saiga::CUDA::ThreadInfo<> ti;
     int id = ti.thread_id;
 
-    if (id < d_particles.size()) {
+    if (id >= startId && id < endId) {
+        int y = (id - startId) / (xMax * zMax);
+        int z = ((id - startId) - (y * xMax * zMax)) / xMax;
+        int x = ((id - startId) - (y * xMax * zMax)) % xMax;
+
         Particle &p = d_particles[id];
-
-        int y = id / (xMax * zMax);
-        int z = (id - (y * xMax * zMax)) / xMax;
-        int x = (id - (y * xMax * zMax)) % xMax;
-        float offset = d_particles[id].radius;
-
         // for fluids
         int matId = -2;
         float distance = 0.5;
@@ -857,7 +855,7 @@ void computeSDF(vec3 voxelGridEnd, int*** grid) {
     }
 }
 
-void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario, vec3 fluidDim) {
+void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario, vec3 fluidDim, vec3 trochoidal1Dim, vec3 trochoidal2Dim, ivec2 layers) {
     int rbID = -1; // free particles
     vec4 color = {0.0f, 1.0f, 0.0f, 1.f};
     if (scenario >= 7) {
@@ -919,11 +917,21 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         solver_iterations = 1;
         c_viscosity = 0.02;
         epsilon_vorticity = 0.001;
+        float distance = 0.5;
 
         // adds trochoidal particles
-        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, x, z, corner, color, fluidDim);
+        // generate first layers of fluids and trochoidals
+        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, 0, layers[0], x, z, corner, color, fluidDim);
         CUDA_SYNC_CHECK_ERROR();
 
+        // generate top layer of fluids and trochoidals
+        corner -= vec3(trochoidal2Dim[0], 0, trochoidal2Dim[2]);
+        float height = trochoidal1Dim[1] - trochoidal2Dim[1];
+        corner += vec3(0, height, 0);
+        x += 1/distance * trochoidal2Dim[0] * 2;
+        z += 1/distance * trochoidal2Dim[2] * 2;
+        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, layers[0], layers[1], x, z, corner, color, fluidDim);
+        CUDA_SYNC_CHECK_ERROR();
     }
     else {
         resetParticles<<<BLOCKS, BLOCK_SIZE>>>(x, z, corner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color);
