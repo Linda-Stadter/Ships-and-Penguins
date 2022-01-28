@@ -1920,11 +1920,13 @@ void ParticleSystem::update(float dt) {
 }
 
 __device__ float stabilize(float rot, float center, float stabilize, float max) {
-    float new_rot = rot * (1 - stabilize) + center * stabilize;
-    if (new_rot > max)
-        new_rot = max;
-    if (new_rot < -max)
-        new_rot = -max;
+    float new_rot = 0;
+    if (rot > M_PI/2.0) {
+        center += M_PI;
+    } else if (rot < -M_PI/2.0) {
+        center -= M_PI;
+    }
+    new_rot = rot * (1 - stabilize) + center * stabilize;
     return new_rot - rot;
 }
 
@@ -1946,26 +1948,32 @@ __global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particle
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > 0)
         return;
-    vec3 rot = rigidBodies[rbID].A.eulerAngles(0, 1, 2);
-    vec3 initRot = rigidBodies[rbID].initA.eulerAngles(0, 1, 2);
+    vec3 rot = rigidBodies[rbID].A.eulerAngles(1, 0, 2);
+    vec3 initRot = rigidBodies[rbID].initA.eulerAngles(1, 0, 2);
     vec3 relRot = rot - initRot;
+
+    // another approach
+    vec3 direction3d = {1, 0, 0};
+    direction3d = rigidBodies[rbID].A * direction3d;
 
     normalizeRotation(relRot);
 
-    rot.y() += rotate * 0.001;    
-    //rot.x() += stabilize(relRot.x(), 0, 0.0001, M_PI/4.0);
-    //rot.z() += stabilize(relRot.z(), 0, 0.0001, M_PI/4.0);
+    rot.x() += rotate * 0.001;
+    rot.y() += stabilize(relRot.y(), 0, 0.01, M_PI/4.0);
+    rot.z() += stabilize(relRot.z(), 0, 0.01, M_PI/4.0);
     
     normalizeRotation(rot);
 
     mat3 rotMat;
-    rotMat = Eigen::AngleAxisf(rot.x(), vec3::UnitX())
-        * Eigen::AngleAxisf(rot.y(), vec3::UnitY())
+    rotMat = Eigen::AngleAxisf(rot.x(), vec3::UnitY())
+        * Eigen::AngleAxisf(rot.y(), vec3::UnitX())
         * Eigen::AngleAxisf(rot.z(), vec3::UnitZ());
     rigidBodies[rbID].A = rotMat;
 
-    vec3 direction = {cosf(rot.y()), 0, sinf(rot.y())};
-    rigidBodies[rbID].originOfMass += direction * forward * 0.01;
+    //vec3 direction = {cosf(rotY), 0, sinf(rotY)};
+    vec3 direction = {direction3d.x(), 0, direction3d.z()};
+    direction.normalize();
+    rigidBodies[rbID].originOfMass += direction * forward * 0.001;
 }
 
 void ParticleSystem::controlRigidBody(int rbID, float forward, float rotate, float dt){
