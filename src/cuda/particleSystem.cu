@@ -1973,11 +1973,12 @@ __global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particle
     //vec3 direction = {cosf(rotY), 0, sinf(rotY)};
     vec3 direction = {direction3d.x(), 0, direction3d.z()};
     direction.normalize();
-    rigidBodies[rbID].originOfMass += direction * forward * 0.001;
+    rigidBodies[rbID].originOfMass += direction * forward * 0.003;
 }
 
 void ParticleSystem::controlRigidBody(int rbID, float forward, float rotate, float dt){
     moveRigidBody<<<1, 32>>>(d_particles, particleCountRB, d_rigidBodies, rbID, forward, rotate);
+    cudaMemcpy(&ship_position, &d_rigidBodies[0].originOfMass, sizeof(vec3) * 1, cudaMemcpyDeviceToHost);
 }
 
 // 2.3 Ray

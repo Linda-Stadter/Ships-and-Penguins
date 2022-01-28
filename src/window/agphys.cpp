@@ -29,10 +29,10 @@ Agphys::Agphys()
     float aspect = window->getAspectRatio();
     camera.setProj(60.0f, aspect, 0.1f, 400.0f);
     camera.setView(vec3(0, 20, 50), vec3(0, 1, 0), vec3(0, 1, 0));
+    camera.rotationPoint     = vec3(0, 0, 0);
     camera.enableInput();
     camera.movementSpeed     = 20;
     camera.movementSpeedFast = 50;
-    camera.rotationPoint     = vec3(0, 0, 0);
     window->setCamera(&camera);
 
     groundPlane.asset = std::make_shared<ColoredAsset>(
@@ -291,7 +291,7 @@ void Agphys::update(float dt)
     if (pause) return;
 
     // controls
-    updateControls(dt);
+    updateControlsAndCamera(dt);
 
     map();
     float t;
@@ -405,31 +405,28 @@ void VertexBuffer<Particle>::setVertexAttributes()
 }
 
 
-void Agphys::updateControls(float delta)
+void Agphys::updateControlsAndCamera(float delta)
 {
-    //if (input)
-    //{
         particleSystem->control_forward = keyboard.getMappedKeyState(0, keyboardmap) - keyboard.getMappedKeyState(1, keyboardmap);
         particleSystem->control_rotate = keyboard.getMappedKeyState(2, keyboardmap) - keyboard.getMappedKeyState(3, keyboardmap);
-        
-        /*int RIGHT = keyboard.getMappedKeyState(Right, keyboardmap) - keyboard.getMappedKeyState(Left, keyboardmap);
 
-        float speed;
-        if (keyboard.getMappedKeyState(Fast, keyboardmap))
-        {
-            speed = movementSpeedFast;
-        }
-        else
-        {
-            speed = movementSpeed;
-        }
+        if (camera_follow) {
+            vec3 position = particleSystem->ship_position;
 
-        vec3 trans  = delta * speed * FORWARD * vec3(0, 0, -1) + delta * speed * RIGHT * vec3(1, 0, 0);
-        int UP = keyboard.getMappedKeyState(Up, keyboardmap) - keyboard.getMappedKeyState(Down, keyboardmap);
-        vec3 transg = vec3(0, 1, 0) * (delta * speed * UP);
-        this->translateLocal(trans);
-        this->translateGlobal(transg);
-    }
-    this->calculateModel();
-    this->updateFromModel();*/
+            // from camera.cpp PixelRay()
+            vec3 p = camera.ViewToWorld(camera.NormalizedToView({0, 0, 1}));
+            vec3 camera_position = camera.getPosition();
+            vec3 camera_direction = (p - camera_position).normalized();
+            
+            //vec3 new_camera_position = position + vec3{10, 20, 0};
+            vec3 camera_offset = {0, 5, 0};
+            float camera_distance = 20;
+            vec3 new_camera_position = position + camera_offset - camera_direction * camera_distance;
+
+            //vec3 up = camera_direction.cross(vec3{0, 1, 0}).cross(camera_direction).normalized();
+            vec3 up = {0, 1, 0};
+
+            //camera.setView(camera_position, camera_position + camera_direction, up); // default (doesnt change anything)
+            camera.setView(new_camera_position, new_camera_position + camera_direction, up);
+        }
 }

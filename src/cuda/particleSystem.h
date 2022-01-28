@@ -118,6 +118,8 @@ class SAIGA_ALIGN(16) ParticleSystem
     float control_rotate = 0;
     void controlRigidBody(int rbID, float forward, float rotate, float dt);
 
+    vec3 ship_position = {0, 0, 0};
+
 
     // GUI
     const char* physics[1] = {"Physics"};

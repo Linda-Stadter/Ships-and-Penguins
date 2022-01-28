@@ -50,6 +50,8 @@ void Agphys::renderGUI()
             updateSingleStep(stepsize);
         }
 
+        ImGui::Checkbox("camera_follow", &camera_follow);
+
         physicsGraph.renderImGui();
     }
 
