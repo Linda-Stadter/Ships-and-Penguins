@@ -117,8 +117,11 @@ class SAIGA_ALIGN(16) ParticleSystem
     float control_forward = 0;
     float control_rotate = 0;
     void controlRigidBody(int rbID, float forward, float rotate, float dt);
+    float control_cannonball = 0;
 
     vec3 ship_position = {0, 0, 0};
+    vec3 camera_direction ={1, 0, 0};
+    vec3 cannonball_speed ={20, 5, 20};
 
 
     // GUI

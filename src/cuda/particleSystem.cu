@@ -1031,6 +1031,17 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         particleCountRB += dim.x() * dim.y() * dim.z();
     }
 
+    if (scenario == 14) {
+        vec3 rot ={0, 0, 0};
+        ivec3 dim ={3, 3, 3};
+
+        color ={.5, .5, .5, 0.5};
+        vec3 pos ={0, 20, 0};
+        // spawns cannonball
+        int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 1, 0.1, 0.2);
+        particleCountRB += dim.x() * dim.y() * dim.z();
+    }
+
     if (scenario > 2 && scenario != 6 && scenario != 7 && scenario < 7)
         deactivateNonRB<<<BLOCKS, BLOCK_SIZE>>>(d_particles);
     CUDA_SYNC_CHECK_ERROR();
@@ -1856,6 +1867,20 @@ __global__ void updateTrochoidalParticles(Saiga::ArrayView<Particle> d_particles
         d_particles[ti.thread_id].predicted = position;
     }
 }
+__global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 direction, vec3 ship_position, vec3 speed, int rbID, float control_cannon) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id > particles.size() || control_cannon != 1 || particles[ti.thread_id].rbID != rbID)
+        return;
+    Particle &p = particles[ti.thread_id];
+
+    p.velocity = {direction[0] * speed[0], speed[1], direction[2] * speed[2]};
+
+    vec3 cannon_offset = vec3(0, 1, 0);
+    // spawn cannonball at ship_position
+    rigidBodies[rbID].originOfMass = ship_position + cannon_offset;
+    // change position of each particle
+    p.position = rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass;
+}
 
 void ParticleSystem::update(float dt) {
     last_dt = dt;
@@ -1864,6 +1889,7 @@ void ParticleSystem::update(float dt) {
 
         resetConstraintCounter<<<1, 32>>>(d_constraintCounter, d_constraintCounterWalls);
         resetCellListOptimized<<<BLOCKS_CELLS, BLOCK_SIZE>>>(d_cell_list, cellCount, particleCount);
+        shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, ship_position, cannonball_speed, 1, control_cannonball);
         updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth);
         
         calculateHash<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);

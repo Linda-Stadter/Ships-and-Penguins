@@ -409,6 +409,7 @@ void Agphys::updateControlsAndCamera(float delta)
 {
         particleSystem->control_forward = keyboard.getMappedKeyState(0, keyboardmap) - keyboard.getMappedKeyState(1, keyboardmap);
         particleSystem->control_rotate = keyboard.getMappedKeyState(2, keyboardmap) - keyboard.getMappedKeyState(3, keyboardmap);
+        particleSystem->control_cannonball = keyboard.getMappedKeyState(0, {GLFW_KEY_C});
 
         if (camera_follow) {
             vec3 position = particleSystem->ship_position;
@@ -417,6 +418,7 @@ void Agphys::updateControlsAndCamera(float delta)
             vec3 p = camera.ViewToWorld(camera.NormalizedToView({0, 0, 1}));
             vec3 camera_position = camera.getPosition();
             vec3 camera_direction = (p - camera_position).normalized();
+            particleSystem->camera_direction = camera_direction;
             
             //vec3 new_camera_position = position + vec3{10, 20, 0};
             vec3 camera_offset = {0, 5, 0};
