@@ -1867,9 +1867,10 @@ __global__ void updateTrochoidalParticles(Saiga::ArrayView<Particle> d_particles
         d_particles[ti.thread_id].predicted = position;
     }
 }
-__global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 direction, vec3 ship_position, vec3 speed, int rbID, float control_cannon) {
+
+__global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 direction, vec3 ship_position, vec3 speed, int rbID) {
     Saiga::CUDA::ThreadInfo<> ti;
-    if (ti.thread_id > particles.size() || control_cannon != 1 || particles[ti.thread_id].rbID != rbID)
+    if (ti.thread_id > particles.size() || particles[ti.thread_id].rbID != rbID)
         return;
     Particle &p = particles[ti.thread_id];
 
@@ -1889,7 +1890,12 @@ void ParticleSystem::update(float dt) {
 
         resetConstraintCounter<<<1, 32>>>(d_constraintCounter, d_constraintCounterWalls);
         resetCellListOptimized<<<BLOCKS_CELLS, BLOCK_SIZE>>>(d_cell_list, cellCount, particleCount);
-        shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, ship_position, cannonball_speed, 1, control_cannonball);
+
+        if (control_cannonball == 1 && cannon_timer >= cannon_timer_reset) {
+            shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, ship_position, cannonball_speed, 1);
+            cannon_timer = 0;
+        }
+
         updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth);
         
         calculateHash<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
@@ -1943,6 +1949,7 @@ void ParticleSystem::update(float dt) {
         cudaDeviceSynchronize();
     }
     steps += 1;
+    cannon_timer += 1;
 }
 
 __device__ float stabilize(float rot, float center, float stabilize, float max) {
