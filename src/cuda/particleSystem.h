@@ -122,10 +122,14 @@ class SAIGA_ALIGN(16) ParticleSystem
     vec3 ship_position = {0, 0, 0};
     vec3 camera_direction ={1, 0, 0};
 
-    // canon parameters
+    // cannon parameters
     vec3 cannonball_speed ={20, 5, 20};
     float cannon_timer = 100;
     float cannon_timer_reset = 100;
+
+    // map parameters
+    vec3 mapDim ={0, 0, 0};
+    vec3 fluidDim ={0, 0, 0};
 
     // GUI
     const char* physics[1] = {"Physics"};

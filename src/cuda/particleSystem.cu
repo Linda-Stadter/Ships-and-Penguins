@@ -18,9 +18,11 @@
 // 4.4
 #include "saiga/core/geometry/AccelerationStructure.h"
 #include "saiga/core/geometry/intersection.h"
+#include <unordered_map>
 
 // time
 float t = 0;
+std::unordered_map<std::string, int> objects{};
 
 void ParticleSystem::setDevicePtr(void* particleVbo) {
     d_particles = ArrayView<Particle>((Particle*) particleVbo, particleCount);
@@ -930,6 +932,10 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         corner += vec3(0, height, 0);
         x += 1/distance * trochoidal2Dim[0] * 2;
         z += 1/distance * trochoidal2Dim[2] * 2;
+
+        mapDim = vec3(x * distance, 80, z * distance);
+        this->fluidDim = fluidDim;
+
         resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, layers[0], layers[1], x, z, corner, color, fluidDim);
         CUDA_SYNC_CHECK_ERROR();
     }
@@ -1038,7 +1044,27 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         color ={.5, .5, .5, 0.5};
         vec3 pos ={0, 20, 0};
         // spawns cannonball
+        objects["ball_1"] = rigidBodyCount;
         int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 1, 0.1, 0.2);
+        particleCountRB += dim.x() * dim.y() * dim.z();
+
+        // spawns enemies
+        dim ={4, 4, 4};
+        color ={.5, 0, .5, 0.5};
+        pos ={-0, 2.5, -0};
+
+        objects["enemy_1"] = rigidBodyCount;
+        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
+        particleCountRB += dim.x() * dim.y() * dim.z();
+
+        pos ={-15, 2.5, -25};
+        objects["enemy_2"] = rigidBodyCount;
+        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
+        particleCountRB += dim.x() * dim.y() * dim.z();
+
+        pos ={17, 2.5, 10};
+        objects["enemy_3"] = rigidBodyCount;
+        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
         particleCountRB += dim.x() * dim.y() * dim.z();
     }
 
@@ -1160,11 +1186,15 @@ __global__ void resetCounter(int *counter) {
     *counter = 0;
 }
 
-__global__ void createConstraintWalls(Saiga::ArrayView<Particle> particles, Saiga::ArrayView<Saiga::Plane> walls, int *constraints, int *constraintCounter, int maxConstraintNum) {
+__global__ void createConstraintWalls(Saiga::ArrayView<Particle> particles, Saiga::ArrayView<Saiga::Plane> walls, int *constraints, int *constraintCounter, int maxConstraintNum, int exception_start, int exception_end) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particles.size())
         return;
     Particle p = particles[ti.thread_id];
+
+    if (p.rbID >= exception_start && p.rbID <= exception_end) {
+        return;
+    }
 
     for (int i = 0; i < walls.size(); i++) {
         Saiga::Plane wall = walls[i];
@@ -1883,6 +1913,22 @@ __global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rig
     p.position = rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass;
 }
 
+__global__ void updateEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 mapDim, vec3 fluidDim, int rbID_start, int rbID_end, float random) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id > particles.size() || particles[ti.thread_id].rbID < rbID_start || particles[ti.thread_id].rbID > rbID_end)
+        return;
+
+    Particle &p = particles[ti.thread_id];
+    p.velocity ={0, 0, 3};
+
+    vec3 originOfMass = rigidBodies[p.rbID].originOfMass;
+    if (originOfMass[0] <= -mapDim[0]/2 || originOfMass[0] >= mapDim[0]/2 || originOfMass[2] <= -mapDim[2]/2 || originOfMass[2] >= mapDim[2]/2) {
+        originOfMass ={-fluidDim[0]/2 * random, 3, -mapDim[2]/2 + 3};
+        p.position = rigidBodies[p.rbID].A * p.relative + originOfMass;
+        rigidBodies[p.rbID].originOfMass = originOfMass;
+    }
+}
+
 void ParticleSystem::update(float dt) {
     last_dt = dt;
     if (physics_mode == 0) {      
@@ -1892,18 +1938,19 @@ void ParticleSystem::update(float dt) {
         resetCellListOptimized<<<BLOCKS_CELLS, BLOCK_SIZE>>>(d_cell_list, cellCount, particleCount);
 
         if (control_cannonball == 1 && cannon_timer >= cannon_timer_reset) {
-            shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, ship_position, cannonball_speed, 1);
+            shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, ship_position, cannonball_speed, objects["ball_1"]);
             cannon_timer = 0;
         }
 
+        updateEnemies<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, mapDim, fluidDim, objects["enemy_1"], objects["enemy_3"], linearRand(-0.9, 0.9));
         updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth);
         
         calculateHash<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
         thrust::sort_by_key(thrust::device_pointer_cast(d_particle_hash), thrust::device_pointer_cast(d_particle_hash) + particleCount, d_particles.device_begin());
         createLinkedCellsOptimized<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
-        
+
         createConstraintParticlesLinkedCellsRigidBodiesFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize);
-        createConstraintWalls<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls);
+        createConstraintWalls<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, objects["ball_1"], objects["enemy_3"]);
         
         updateLookupTable<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particleIdLookup);
         CUDA_SYNC_CHECK_ERROR();
