@@ -1012,7 +1012,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         ivec3 dim = {10,10,10};
         vec3 pos = {-5, 0, -5};
 
-        particleCountRB = dimX*dimZ;
+        particleCountRB = dimX * dimZ;
         int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 5);
         particleCountRB += dim.x() * dim.y() * dim.z();
     }
@@ -1391,12 +1391,17 @@ __global__ void updateLookupTable(Saiga::ArrayView<Particle> particles, int *par
     particleIdLookup[particles[ti.thread_id].id] = ti.thread_id;
 }
 
-__global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstraint *constraints, int *constraintCounter, int maxConstraintNum, int *particleIdLookup) {
+__global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstraint *constraints, int *constraintCounter, int maxConstraintNum, int *particleIdLookup, float breakDistance) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= *constraintCounter || ti.thread_id >= maxConstraintNum)
         return;
     int idxA_ = constraints[ti.thread_id].first;
     int idxB_ = constraints[ti.thread_id].second;
+
+    // ignore broken constraints
+    if (idxA_ == -1)
+        return;
+
     int idxA = particleIdLookup[idxA_];
     int idxB = particleIdLookup[idxB_];
     Particle &pa = particles[idxA];
@@ -1411,7 +1416,9 @@ __global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstr
     float m1 = pa.massinv;
     float m2 = pb.massinv;
 
-    float d = collideSphereSphere(constraints[ti.thread_id].dist, 0, pa_copy.predicted, pb_copy.predicted);
+    float constraintDistance = constraints[ti.thread_id].dist;
+
+    float d = collideSphereSphere(constraintDistance, 0, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
     float m = (m1 / (m1 + m2));
     vec3 dx1 = m * d * n;
@@ -1421,6 +1428,12 @@ __global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstr
         dx2 *= 2.0;
     if (pb.fixed)
         dx1 *= 2.0;
+
+    // break constraint
+    if (breakDistance > 0 && abs(d) > constraintDistance * breakDistance) {
+        constraints[ti.thread_id].first = -1;
+        constraints[ti.thread_id].second = -1;
+    }
 
     // jacobi integration
     if (!pa.fixed) {
@@ -1974,7 +1987,7 @@ void ParticleSystem::update(float dt) {
             solverPBDParticlesSDF<<<Saiga::CUDA::getBlockCount(maxConstraintNum, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintList, d_constraintCounter, maxConstraintNum, relax_p, d_rigidBodies, mu_k, mu_s, mu_f);
             solverPBDWalls<<<Saiga::CUDA::getBlockCount(maxConstraintNumWalls, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, relax_p, mu_k, mu_s, mu_f);
             
-            solverPBDCloth<<<Saiga::CUDA::getBlockCount(maxConstraintNumCloth, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintListCloth, d_constraintCounterCloth, maxConstraintNumCloth, d_particleIdLookup);
+            solverPBDCloth<<<Saiga::CUDA::getBlockCount(maxConstraintNumCloth, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintListCloth, d_constraintCounterCloth, maxConstraintNumCloth, d_particleIdLookup, cloth_break_distance);
             if (test_bool)
                 solverPBDClothBending<<<Saiga::CUDA::getBlockCount(maxConstraintNumClothBending, BLOCK_SIZE), BLOCK_SIZE>>>(d_particles, d_constraintListClothBending, d_constraintCounterClothBending, maxConstraintNumClothBending, d_particleIdLookup, test_float);
             
