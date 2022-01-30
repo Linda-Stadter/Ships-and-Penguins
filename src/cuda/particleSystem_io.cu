@@ -29,6 +29,8 @@ void ParticleSystem::renderGUI()
         ImGui::Checkbox("test bool", &test_bool);
         ImGui::InputFloat("test float", &test_float);
 
+        ImGui::InputFloat("cloth_break_distance", &cloth_break_distance);
+
         ImGui::InputFloat("kinetic friction", &mu_k);
         ImGui::InputFloat("static friction", &mu_s);
         ImGui::InputFloat("friction", &mu_f);

@@ -84,6 +84,8 @@ class SAIGA_ALIGN(16) ParticleSystem
     bool test_bool = true;
     float test_float = 0.05;
 
+    float cloth_break_distance = 1.0;
+
     float mu_k = 0.1;
     float mu_s = 0.8;
     float mu_f = 0.0;
