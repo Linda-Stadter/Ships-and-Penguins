@@ -1042,6 +1042,57 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         particleCountRB += dim.x() * dim.y() * dim.z();
     }
 
+    if (scenario == 14) {
+        // spawns cloth
+        rbID = -3; // free particles
+        vec4 color = {1.0f, 1.0f, 1.0f, 1.f};
+        vec3 clothCorner {-20, 10, -20};
+        int dimX = 10;
+        int dimZ = 10;
+        int clothParticleCount = dimX * dimZ;
+        initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, clothParticleCount, dimX, dimZ, clothCorner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color, false, 0.1);
+        // fix upper row
+        initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, dimX, dimX, 1, clothCorner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color, true, 0.1);
+        CUDA_SYNC_CHECK_ERROR();
+
+        std::vector<ClothConstraint> clothConstraints(0);
+
+        std::vector<ClothBendingConstraint> clothBendingConstraints(0);
+
+        for (int j = 0; j < dimZ; j++) {
+            for (int i = 0; i < dimX; i++) {
+                int idx = particleCountRB + j * dimX + i;
+                if (i < dimX - 1) {
+                    clothConstraints.push_back({idx, idx+1, 1.0f * distance});
+                }
+                if (j < dimZ - 1) {
+                    clothConstraints.push_back({idx, idx+dimX, 1.0f * distance});
+                }
+                if (j < dimZ - 1 && i < dimX - 1) {
+                    if (i+j % 2)
+                        clothConstraints.push_back({idx, idx+dimX+1, 1.4142f*distance});
+                    else
+                        clothConstraints.push_back({idx+dimX, idx+1, 1.4142f*distance});
+
+                    clothBendingConstraints.push_back({idx+dimX+1, idx, idx+dimX, idx+1});
+                }
+            }
+        }
+
+        particleCountRB += clothParticleCount;
+
+        size_t clothConstraintSize = sizeof(clothConstraints[0]) * clothConstraints.size();
+        size_t clothBendingConstraintSize = sizeof(clothBendingConstraints[0]) * clothBendingConstraints.size();
+
+        int distanceConstraintCount = clothConstraints.size();
+        int bendingConstraintCount = clothBendingConstraints.size();
+
+        cudaMemcpy(d_constraintListCloth, clothConstraints.data(), clothConstraintSize, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_constraintListClothBending, clothBendingConstraints.data(), clothBendingConstraintSize, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_constraintCounterCloth, &distanceConstraintCount, sizeof(int) * 1, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_constraintCounterClothBending, &bendingConstraintCount, sizeof(int) * 1, cudaMemcpyHostToDevice);
+    }
+
     if (scenario > 2 && scenario != 6 && scenario != 7 && scenario < 7)
         deactivateNonRB<<<BLOCKS, BLOCK_SIZE>>>(d_particles);
     CUDA_SYNC_CHECK_ERROR();
