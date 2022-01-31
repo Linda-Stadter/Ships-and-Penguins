@@ -65,3 +65,25 @@ void ParticleSystem::renderGUI()
     }
     ImGui::End();
 }
+
+void ParticleSystem::renderIngameGUI()
+{
+    // game ui
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(200, 900), ImGuiCond_Always);
+    if(ImGui::Begin("TEST", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
+    {
+        ImGui::TextColored(ImColor(1.f, 1.f, 1.f, 1.f), "Time: ");
+        int reload_bar_length = 10;
+        int reload_bar_progress = (float)cannon_timer / (float)cannon_timer_reset * reload_bar_length;
+        std::string reload = "reload: ";
+        for (int i = 0; i < reload_bar_progress; i++) {
+            reload.append("#");
+        }
+        ImColor reload_color = ImColor(1.f, 1.f, 1.f, 1.f);
+        if (reload_bar_progress == reload_bar_length)
+            reload_color = ImColor(.5f, 1.f, .5f, 1.f);
+        ImGui::TextColored(reload_color, reload.c_str());
+    }
+    ImGui::End();
+}

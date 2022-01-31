@@ -172,4 +172,5 @@ class SAIGA_ALIGN(16) ParticleSystem
     void setDevicePtr(void* ptr);
 
     void renderGUI();
+    void renderIngameGUI();
 };

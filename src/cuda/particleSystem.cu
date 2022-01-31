@@ -2060,7 +2060,8 @@ void ParticleSystem::update(float dt) {
         cudaDeviceSynchronize();
     }
     steps += 1;
-    cannon_timer += 1;
+    if (cannon_timer < cannon_timer_reset)
+        cannon_timer += 1;
 }
 
 __device__ float stabilize(float rot, float center, float stabilize, float max) {
