@@ -136,8 +136,8 @@ class SAIGA_ALIGN(16) ParticleSystem
     // GUI
     const char* physics[1] = {"Physics"};
     int physics_mode = 0;
-    const char* actions[7] = {"Color", "Impulse", "Explode", "Implode", "Split", "Inflate", "Deflate"};
-    int action_mode = 0;
+    const char* actions[5] = {"Color", "Impulse", "Explode", "Implode", "Print Info"};
+    int action_mode = 4;
 
     // action parameters
     vec4 color = {1,1,0,1};

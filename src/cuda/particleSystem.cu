@@ -2148,6 +2148,16 @@ __global__ void rayExplosion(Saiga::ArrayView<Particle> particles, Saiga::Ray ra
     list[ti.thread_id].second = 0;
 }
 
+__global__ void rayInfo(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, thrust::pair<int, float> *list, int *rayHitCount, int min) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id >= 1000)
+        return;
+    if (ti.thread_id == 0) {
+        printf("idx: %i; id: %i; rb:%i\n", list[min].first, particles[list[min].first].id, particles[list[min].first].rbID);
+    }
+    list[ti.thread_id].second = 0;
+}
+
 // remove if
 struct remove_predicate
 {
@@ -2184,6 +2194,8 @@ void ParticleSystem::ray(Saiga::Ray ray) {
         rayExplosion<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, true, explosion_force);
     } else if (action_mode == 3) {
         rayExplosion<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, false, explosion_force);
+    } else if (action_mode == 4) {
+        rayInfo<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min);
     }
     CUDA_SYNC_CHECK_ERROR();
 }
