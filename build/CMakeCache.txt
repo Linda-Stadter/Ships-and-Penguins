@@ -174,10 +174,10 @@ CHOLMOD_LIBRARIES:FILEPATH=CHOLMOD_LIBRARIES-NOTFOUND
 CMAKEPACKAGE_INSTALL_DIR:STRING=share/eigen3/cmake
 
 //Path to a program.
-CMAKE_AR:FILEPATH=C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x86/lib.exe
+CMAKE_AR:FILEPATH=C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x64/lib.exe
 
 //ASM compiler
-CMAKE_ASM_COMPILER:FILEPATH=C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x86/cl.exe
+CMAKE_ASM_COMPILER:FILEPATH=C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x64/cl.exe
 
 //Flags used by the ASM compiler during all build types.
 CMAKE_ASM_FLAGS:STRING=
@@ -260,7 +260,7 @@ CMAKE_C_STANDARD_LIBRARIES:STRING=kernel32.lib user32.lib gdi32.lib winspool.lib
 CMAKE_DEBUG_POSTFIX:STRING=d
 
 //Flags used by the linker during all build types.
-CMAKE_EXE_LINKER_FLAGS:STRING=/machine:X86
+CMAKE_EXE_LINKER_FLAGS:STRING=/machine:x64
 
 //Flags used by the linker during DEBUG builds.
 CMAKE_EXE_LINKER_FLAGS_DEBUG:STRING=/debug /INCREMENTAL
@@ -329,11 +329,11 @@ CMAKE_INSTALL_SHAREDSTATEDIR:PATH=com
 CMAKE_INSTALL_SYSCONFDIR:PATH=etc
 
 //Path to a program.
-CMAKE_LINKER:FILEPATH=C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x86/link.exe
+CMAKE_LINKER:FILEPATH=C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.28.29333/bin/Hostx64/x64/link.exe
 
 //Flags used by the linker during the creation of modules during
 // all build types.
-CMAKE_MODULE_LINKER_FLAGS:STRING=/machine:X86
+CMAKE_MODULE_LINKER_FLAGS:STRING=/machine:x64
 
 //Flags used by the linker during the creation of modules during
 // DEBUG builds.
@@ -398,7 +398,7 @@ CMAKE_RC_FLAGS_RELWITHDEBINFO:STRING=
 
 //Flags used by the linker during the creation of shared libraries
 // during all build types.
-CMAKE_SHARED_LINKER_FLAGS:STRING=/machine:X86
+CMAKE_SHARED_LINKER_FLAGS:STRING=/machine:x64
 
 //Flags used by the linker during the creation of shared libraries
 // during DEBUG builds.
@@ -418,14 +418,14 @@ CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO:STRING=/debug /INCREMENTAL
 
 //If set, runtime paths are not added when installing shared libraries,
 // but are added when building.
-CMAKE_SKIP_INSTALL_RPATH:BOOL=OFF
+CMAKE_SKIP_INSTALL_RPATH:BOOL=NO
 
 //If set, runtime paths are not added when using shared libraries.
-CMAKE_SKIP_RPATH:BOOL=OFF
+CMAKE_SKIP_RPATH:BOOL=NO
 
 //Flags used by the linker during the creation of static libraries
 // during all build types.
-CMAKE_STATIC_LINKER_FLAGS:STRING=/machine:X86
+CMAKE_STATIC_LINKER_FLAGS:STRING=/machine:x64
 
 //Flags used by the linker during the creation of static libraries
 // during DEBUG builds.
@@ -447,10 +447,7 @@ CMAKE_STATIC_LINKER_FLAGS_RELWITHDEBINFO:STRING=
 // .SILENT directive, and all commands will be echoed to the console
 // during the make.  This is useful for debugging only. With Visual
 // Studio IDE projects all commands are done without /nologo.
-CMAKE_VERBOSE_MAKEFILE:BOOL=OFF
-
-//Test COMPILER_SUPPORT_std=cpp03
-COMPILER_SUPPORT_std:UNINITIALIZED=cpp03:INTERNAL=
+CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 
 //Enable to build 7-Zip packages
 CPACK_BINARY_7Z:BOOL=OFF
@@ -1112,6 +1109,9 @@ g2o_DIR:PATH=g2o_DIR-NOTFOUND
 //Value Computed by CMake
 glog_BINARY_DIR:STATIC=C:/Users/linda/Documents/AGPhys Projekt/ships/build/External/saiga/submodules/glog
 
+//Dependencies for the target
+glog_LIB_DEPENDS:STATIC=general;dbghelp;
+
 //Value Computed by CMake
 glog_SOURCE_DIR:STATIC=C:/Users/linda/Documents/AGPhys Projekt/ships/External/saiga/submodules/glog
 
@@ -1315,7 +1315,7 @@ CMAKE_GENERATOR:INTERNAL=Visual Studio 16 2019
 //Generator instance identifier.
 CMAKE_GENERATOR_INSTANCE:INTERNAL=C:/Program Files (x86)/Microsoft Visual Studio/2019/Community
 //Name of generator platform.
-CMAKE_GENERATOR_PLATFORM:INTERNAL=Win32
+CMAKE_GENERATOR_PLATFORM:INTERNAL=
 //Name of generator toolset.
 CMAKE_GENERATOR_TOOLSET:INTERNAL=
 //Have include pthread.h
@@ -1623,7 +1623,7 @@ HAVE_CXX11_NULLPTR_T:INTERNAL=1
 //Test HAVE_CXX11_TLS
 HAVE_CXX11_TLS:INTERNAL=1
 //Have library dbghelp
-HAVE_DBGHELP:INTERNAL=
+HAVE_DBGHELP:INTERNAL=1
 //Have function dladdr
 HAVE_DLADDR:INTERNAL=
 //Have include dlfcn.h
@@ -1855,7 +1855,7 @@ _GNUInstallDirs_LAST_CMAKE_INSTALL_PREFIX:INTERNAL=C:/Program Files (x86)/agphys
 //Path to a program.
 _Python_EXECUTABLE:INTERNAL=C:/Users/linda/AppData/Local/Programs/Python/Python39/python.exe
 //Python Properties
-_Python_INTERPRETER_PROPERTIES:INTERNAL=Python;3;9;1;32;;cp39-win_amd64;C:\Users\linda\AppData\Local\Programs\Python\Python39\Lib;C:\Users\linda\AppData\Local\Programs\Python\Python39\Lib;C:\Users\linda\AppData\Local\Programs\Python\Python39\Lib\site-packages;C:\Users\linda\AppData\Local\Programs\Python\Python39\Lib\site-packages
+_Python_INTERPRETER_PROPERTIES:INTERNAL=Python;3;9;1;64;;cp39-win_amd64;C:\Users\linda\AppData\Local\Programs\Python\Python39\Lib;C:\Users\linda\AppData\Local\Programs\Python\Python39\Lib;C:\Users\linda\AppData\Local\Programs\Python\Python39\Lib\site-packages;C:\Users\linda\AppData\Local\Programs\Python\Python39\Lib\site-packages
 _Python_INTERPRETER_SIGNATURE:INTERNAL=d648c8969ad9ea3af8b5da045328ddc1
 __pkg_config_checked_PC_OPENNI2:INTERNAL=1
 generated_dir:INTERNAL=C:/Users/linda/Documents/AGPhys Projekt/ships/build/External/saiga/submodules/googletest/googletest/generated

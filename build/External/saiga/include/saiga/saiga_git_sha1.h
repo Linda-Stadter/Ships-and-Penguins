@@ -6,4 +6,4 @@
 
 #pragma once
 
-#define SAIGA_GIT_SHA1 "8b34eb24cc8ee1c40d48bdf615bd180f9ecbc7dd"
+#define SAIGA_GIT_SHA1 ""

@@ -426,7 +426,7 @@ FodyWeavers.xsd
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,windows,cuda
 
-build/
+build/**
 out/
 *.exe
 *.dll

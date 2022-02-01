@@ -19,6 +19,7 @@
 #include "saiga/core/geometry/AccelerationStructure.h"
 #include "saiga/core/geometry/intersection.h"
 #include <unordered_map>
+#include <crt\math_functions.h>
 
 // time
 float t = 0;
@@ -861,7 +862,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     int rbID = -1; // free particles
     vec4 color = {0.0f, 1.0f, 0.0f, 1.f};
     if (scenario >= 7) {
-        color = {0.1f, 0.2f, 0.8f, 1.f};
+        color = {0, 0, 0.8, 1};
         rbID = -2; // fluid
     }
     if (scenario == 12) { // trochoidal test scenario
@@ -913,7 +914,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     else if (scenario == 14) {
         // scene parameters
         wave_number = 3.5;
-        steepness = 0.6;
+        steepness = 0.35;
         wind_direction = {-1.0, 0.0, -1.0};
         wind_speed = 0.7;
         solver_iterations = 1;
@@ -1610,15 +1611,15 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
 
         ivec3 cell_idx = calculateCellIdx(pa.predicted, cellSize); // actually pa.position but we only load predicted and its identical here
 
-        static const int X_CONSTS[14] = {-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 0, 0, 0, 0};
-        static const int Y_CONSTS[14] = {-1,-1,-1, 0, 0, 0, 1, 1, 1,-1,-1,-1, 0, 0};
-        static const int Z_CONSTS[14] = {-1, 0, 1,-1, 0, 1,-1, 0, 1,-1, 0, 1,-1, 0};
+        static const int X_CONSTS[14] ={-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0};
+        static const int Y_CONSTS[14] ={-1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0};
+        static const int Z_CONSTS[14] ={-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0};
 
         for (int i = 0; i < 14; i++) {
             int x = X_CONSTS[i];
             int y = Y_CONSTS[i];
             int z = Z_CONSTS[i];
-            
+
             ivec3 neighbor_cell_idx = cell_idx + ivec3(x, y, z);
             int neighbor_flat_idx = calculateHashIdx(neighbor_cell_idx, cell_dims, cellCount);
             int neighbor_particle_idx = cell_list[neighbor_flat_idx].first;
@@ -1628,8 +1629,8 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
                 int rbIDb = particles[neighbor_particle_idx].rbID;
                 if (rbIDb == -4)
                     continue;
-                if ( (rbIDa == -1 || rbIDb == -1 || rbIDa != rbIDb) &&
-                        (i != 13 || neighbor_particle_idx > ti.thread_id) ) {
+                if ((rbIDa == -1 || rbIDb == -1 || rbIDa != rbIDb) &&
+                        (i != 13 || neighbor_particle_idx > ti.thread_id)) {
                     Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
                     float d0 = collideSphereSphere(pa.radius, pb.radius, pa.predicted, pb.predicted);
                     if (d0 > 0) {
@@ -1685,7 +1686,7 @@ __device__ float calculateSpray(float C_density, float rho0inv) {
     return spray;
 }
 
-__global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize, float h, float epsilon_spiky, float omega_lambda_relax, float particleRadius) {
+__global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize, float h, float epsilon_spiky, float omega_lambda_relax, float particleRadius, vec3 fluidDim) {
     Saiga::CUDA::ThreadInfo<> ti;
     const float m = 1.0;
 
@@ -1734,6 +1735,14 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
         lambda1 *= lambda1;
         float lambda = -C_density / (lambda1 + lambda2 + omega_lambda_relax);
         particles[ti.thread_id].lambda = lambda;
+
+        // no spray at fluid borders
+        vec3 fluidDim_neg = -fluidDim/2 + vec3(2, 2, 2);
+        vec3 fluidDim_pos = fluidDim/2 - vec3(2, 2, 2);
+        if (pa.predicted[0] <= fluidDim_neg[0] || pa.predicted[2] <= fluidDim_neg[2] || pa.predicted[0] >= fluidDim_pos[0] || pa.predicted[2] >= fluidDim_pos[2]) {
+            particles[ti.thread_id].color ={0, 0, 0.8, 1};
+            return;
+        }
 
         // gischt (spray)
         float spray = calculateSpray(C_density, rho0inv);
@@ -1907,7 +1916,7 @@ __global__ void applyVorticityAndViscosity(float dt, Saiga::ArrayView<Particle> 
     }
 }
 
-__device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_length, float steepness, float t) {
+__device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_length, float steepness, float t, float dif) {
     direction = normalize(direction);
     float x = gridPoint[0];
     float y = gridPoint[1];
@@ -1918,8 +1927,8 @@ __device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_
     float c = 9.8 / (k * 2.5);
 
     // amplitude
-    float a = (steepness / 10 * y) / k;
-
+    float a = ((steepness / 10 * y) * 2) / k;
+    float a_cos = ((steepness / 10 * y) * dif) / k;
     float f = k * (direction[0] * x + direction[1] * z - c * t);
 
     //float sin_f = sinf(f);
@@ -1929,13 +1938,31 @@ __device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_
     sincosf(f, &sin_f, &cos_f);
 
     float xOffset = direction[0] * a * sin_f;
-    float yOffset = -a * cos_f;
+    float yOffset = -a_cos * cos_f;
     float zOffset = direction[1] * a * sin_f;
 
     return vec3(xOffset, yOffset, zOffset);
 }
 
-__global__ void updateTrochoidalParticles(Saiga::ArrayView<Particle> d_particles, float wave_length, float phase_speed, float steepness, float t) {
+__device__ vec4 colorTrochoidalParticles(vec3 position, vec3 old_position, vec4 color) {
+    vec4 d_color = vec4(0.01, 0.01, 0.01, 0.01);
+    float rand = ((int)position[0] + (int)position[2]) % 17 * 0.05;
+
+    if (old_position[1] - position[1] > -0.15) {
+        color -= d_color * 3;
+    }
+    else {
+        color += d_color * abs(rand);
+    }
+
+    if (color[2] <= 0.8) {
+        color = vec4(0, 0, 0.8, 1);
+    }
+
+    return color;
+}
+
+__global__ void updateTrochoidalParticles(Saiga::ArrayView<Particle> d_particles, float wave_length, float phase_speed, float steepness, float t, vec3 fluidDim) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id < d_particles.size()) {
         if (d_particles[ti.thread_id].rbID != -4) {
@@ -1943,22 +1970,52 @@ __global__ void updateTrochoidalParticles(Saiga::ArrayView<Particle> d_particles
         }
 
         vec3 position = d_particles[ti.thread_id].relative;
+        float dif = 2;
+        float dif_x = 0;
+        float dif_z = 0;
+        float min_dif = 0.4;
+        if (position[0] <= -fluidDim[0]/2) {
+            dif_x = abs(-fluidDim[0]/2 - position[0]) + min_dif;
+        }
+        if (position[0] >= fluidDim[0]/2) {
+            dif_x = abs(fluidDim[0]/2 - position[0]) + min_dif;
+        }
+        if (position[2] <= -fluidDim[2]/2) {
+            dif_z = abs(-fluidDim[2]/2 - position[2])+ min_dif;
+        }
+        if (position[2] >= fluidDim[2]/2) {
+            dif_z = abs(fluidDim[2]/2 - position[2]) + min_dif;
+        }
+
+        if (dif_z > 0 && dif_x > 0) {
+            dif = min(max(dif_x, dif_z), dif);
+        }
+        else if (dif_z > 0) {
+            dif = min(dif, dif_z);
+        }
+        else {
+            dif = min(dif, dif_x);
+        }
 
         // add different trochoidal waves
+        vec3 old_position = position;
         // main wave
-        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(1, 0), wave_length, steepness, t);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(1, 1), wave_length, steepness, t, dif);
         // small waves
-        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.2, 0.8), wave_length * 0.8, steepness * 0.8, t);
-        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.8, 0.2), wave_length * 0.5, steepness * 0.95, t);
-        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.5, 0.5), wave_length * 0.7, steepness * 0.9, t);
-        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.1, 0.9), wave_length * 1.2, steepness * 1.1, t);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.3, 0.8), wave_length * 0.8, steepness * 0.8, t, dif);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.8, 0.3), wave_length * 0.5, steepness * 0.95, t, dif);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.5, 0.5), wave_length * 0.7, steepness * 0.9, t, dif);
+        
         // huge waves
-        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(1, 0), wave_length * 2, steepness * 1.5, t);
-        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.1, 0.9), wave_length * 1.9, steepness * 1.2, t);
-        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.9, 0.1), wave_length * 2.1, steepness * 1.1, t);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(1, 0.4), wave_length * 2, steepness * 1.5, t, dif);
+        position += trochoidalWaveOffset(d_particles[ti.thread_id].relative, vec2(0.1, 0.9), wave_length * 1.9, steepness * 1.2, t, dif);
 
         d_particles[ti.thread_id].position = position;
         d_particles[ti.thread_id].predicted = position;
+
+
+        vec4 color = d_particles[ti.thread_id].color;
+        d_particles[ti.thread_id].color = colorTrochoidalParticles(position, old_position, color);
     }
 }
 
@@ -1983,9 +2040,9 @@ __global__ void updateEnemies(Saiga::ArrayView<Particle> particles, RigidBody *r
         return;
 
     Particle &p = particles[ti.thread_id];
+    vec3 originOfMass = rigidBodies[p.rbID].originOfMass;
     p.velocity ={0, 0, 3};
 
-    vec3 originOfMass = rigidBodies[p.rbID].originOfMass;
     if (originOfMass[0] <= -mapDim[0]/2 || originOfMass[0] >= mapDim[0]/2 || originOfMass[2] <= -mapDim[2]/2 || originOfMass[2] >= mapDim[2]/2) {
         originOfMass ={-fluidDim[0]/2 * random, 3, -mapDim[2]/2 + 3};
         p.position = rigidBodies[p.rbID].A * p.relative + originOfMass;
@@ -2023,9 +2080,8 @@ void ParticleSystem::update(float dt) {
         float calculatedRelaxP = relax_p;
 
         for (int i = 0; i < solver_iterations; i++) {
-            computeDensityAndLambda<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, omega_lambda_relax, particle_radius_rest_density);
+            computeDensityAndLambda<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, omega_lambda_relax, particle_radius_rest_density, fluidDim);
             updateParticlesPBD2IteratorFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, particle_radius_rest_density, artificial_pressure_k, artificial_pressure_n, w_poly_d_q);
-
             if (use_calculated_relax_p) {
                 calculatedRelaxP = 1 - pow(1 - calculatedRelaxP, 1.0/(i+1));
             }
@@ -2050,8 +2106,8 @@ void ParticleSystem::update(float dt) {
         resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
         CUDA_SYNC_CHECK_ERROR();
 
+        updateTrochoidalParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, wave_number, phase_speed, steepness, dt * steps, fluidDim);
         updateParticlesPBD2<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, relax_p);
-        updateTrochoidalParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, wave_number, phase_speed, steepness, dt * steps);
 
         computeVorticityAndViscosity<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, c_viscosity);
         applyVorticityAndViscosity<<<BLOCKS, BLOCK_SIZE>>>(dt, d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, epsilon_vorticity, wind_direction, wind_speed);
