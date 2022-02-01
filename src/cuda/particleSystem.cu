@@ -689,9 +689,9 @@ __global__ void resolveRigidBodyConstraints(Saiga::ArrayView<Particle> particles
     }
 }
 
-__global__ void resetRigidBody(RigidBody *rigidBodies, int rigidBodyCount) {
+__global__ void resetRigidBody(RigidBody *rigidBodies, int maxRigidBodyCount) {
     Saiga::CUDA::ThreadInfo<> ti;
-    if (ti.thread_id >= rigidBodyCount)
+    if (ti.thread_id >= maxRigidBodyCount)
         return;
     RigidBody &rb = rigidBodies[ti.thread_id];
     // reset
@@ -728,7 +728,7 @@ void ParticleSystem::constraintsShapeMatchingRB() {
 void ParticleSystem::updateRigidBodies() {
     const unsigned int BLOCKS_RB = Saiga::CUDA::getBlockCount(rigidBodyCount, BLOCK_SIZE);
 
-    resetRigidBody<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
+    resetRigidBody<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, maxRigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
 
     caclulateRigidBodyOriginOfMass<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
@@ -1123,7 +1123,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         deactivateNonRB<<<BLOCKS, BLOCK_SIZE>>>(d_particles);
     CUDA_SYNC_CHECK_ERROR();
     
-    resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
+    resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, maxRigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
 
     caclulateRigidBodyOriginOfMass<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCountRB, d_rigidBodies);
@@ -1134,7 +1134,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     updateRigidBodies();
     initRigidBodiesRotation<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
 
-    resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
+    resetRigidBody<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, maxRigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
 }
 
@@ -2064,61 +2064,29 @@ void ParticleSystem::update(float dt) {
         cannon_timer += 1;
 }
 
-__device__ float stabilize(float rot, float center, float stabilize, float max) {
-    float new_rot = 0;
-    if (rot > M_PI/2.0) {
-        center += M_PI;
-    } else if (rot < -M_PI/2.0) {
-        center -= M_PI;
-    }
-    new_rot = rot * (1 - stabilize) + center * stabilize;
-    return new_rot - rot;
-}
-
-__device__ float normalizeRotation(float rot) {
-    if (rot > M_PI)
-        rot = rot - 2 * M_PI;
-    if (rot < -M_PI)
-        rot = rot + 2 * M_PI;
-    return rot;
-}
-
-__device__ void normalizeRotation(vec3 rot) {
-    rot.x() = normalizeRotation(rot.x());
-    rot.y() = normalizeRotation(rot.y());
-    rot.z() = normalizeRotation(rot.z());
-}
-
-__global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies, int rbID, float forward, float rotate) {
+__global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies, int rbID, float forward, float rotate, float stabilize = 0.01) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > 0)
         return;
-    vec3 rot = rigidBodies[rbID].A.eulerAngles(1, 0, 2);
-    vec3 initRot = rigidBodies[rbID].initA.eulerAngles(1, 0, 2);
-    vec3 relRot = rot - initRot;
 
-    // another approach
-    vec3 direction3d = {1, 0, 0};
-    direction3d = rigidBodies[rbID].A * direction3d;
+    vec3 direction = rigidBodies[rbID].A * vec3{0, 1, 0};
+    vec3 directionInit = rigidBodies[rbID].initA * vec3{0, 1, 0};
+    Eigen::Quaternionf q = Eigen::Quaternionf::FromTwoVectors(direction, (directionInit * stabilize + direction * (1 - stabilize)).normalized());
+    mat3 normRotation = q.normalized().toRotationMatrix();
 
-    normalizeRotation(relRot);
+    vec3 rot = normRotation.eulerAngles(1, 0, 2);
+    rot[0] += rotate * 0.001;
+    normRotation = Eigen::AngleAxisf(rot[0], vec3::UnitY())
+        * Eigen::AngleAxisf(rot[1], vec3::UnitX())
+        * Eigen::AngleAxisf(rot[2], vec3::UnitZ());
 
-    rot.x() += rotate * 0.001;
-    rot.y() += stabilize(relRot.y(), 0, 0.01, M_PI/4.0);
-    rot.z() += stabilize(relRot.z(), 0, 0.01, M_PI/4.0);
-    
-    normalizeRotation(rot);
-
-    mat3 rotMat;
-    rotMat = Eigen::AngleAxisf(rot.x(), vec3::UnitY())
-        * Eigen::AngleAxisf(rot.y(), vec3::UnitX())
-        * Eigen::AngleAxisf(rot.z(), vec3::UnitZ());
+    mat3 rotMat = normRotation * rigidBodies[rbID].A;
     rigidBodies[rbID].A = rotMat;
 
-    //vec3 direction = {cosf(rotY), 0, sinf(rotY)};
-    vec3 direction = {direction3d.x(), 0, direction3d.z()};
-    direction.normalize();
-    rigidBodies[rbID].originOfMass += direction * forward * 0.003;
+    vec3 direction3d = rigidBodies[rbID].A * vec3{1, 0, 0};
+    vec3 direction2d = {direction3d.x(), 0, direction3d.z()};
+    direction2d.normalize();
+    rigidBodies[rbID].originOfMass += direction2d * forward * 0.003;
 }
 
 void ParticleSystem::controlRigidBody(int rbID, float forward, float rotate, float dt){
