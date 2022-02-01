@@ -8,6 +8,7 @@ void Agphys::renderGUI()
 {
     if (!shouldRenderGUI)
     {
+        particleSystem->renderIngameGUI();
         return;
     }
 
@@ -118,6 +119,14 @@ void Agphys::keyPressed(int key, int scancode, int mods)
             updateSingleStep(stepsize);
             break;
         case GLFW_KEY_F12:
+            break;
+        case GLFW_KEY_F1:
+            shouldRenderGUI = !shouldRenderGUI;
+            showSaigaGui = !showSaigaGui;
+            renderer->timer->Enable(false);
+            renderer->window->setShowImgui(false);
+            editor_gui.enabled = false;
+            //main_menu.EraseItem("Saiga", "Log");
             break;
         case GLFW_KEY_F3:
             shouldRenderGUI = !shouldRenderGUI;
