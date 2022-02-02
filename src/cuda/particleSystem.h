@@ -74,6 +74,11 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     int *d_particleIdLookup;
 
+    int *d_enemyGridWeight;
+    int *d_enemyGridId;
+    int enemyGridDim = 15;
+    float enemyGridCell = 0;
+
     vec3 gravity = {0, -9.81, 0};
 
     float damp_v = 1.0; //0.995;

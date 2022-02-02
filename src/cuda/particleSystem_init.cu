@@ -23,6 +23,9 @@ ParticleSystem::ParticleSystem(int _particleCount, vec3 _boxMin, vec3 _boxDim)
     checkError(cudaMalloc((void **)&d_constraintCounterClothBending, sizeof(int)));
 
     checkError(cudaMalloc((void **)&d_particleIdLookup, sizeof(int) * particleCount));
+
+    checkError(cudaMalloc((void **)&d_enemyGridWeight, sizeof(int) * enemyGridDim * enemyGridDim));
+    checkError(cudaMalloc((void **)&d_enemyGridId, sizeof(int) * enemyGridDim * enemyGridDim));
     
     checkError(cudaMalloc((void **)&d_rigidBodies, sizeof(RigidBody) * maxRigidBodyCount));
 
@@ -49,6 +52,9 @@ ParticleSystem::~ParticleSystem()
 
     checkError(cudaFree(d_particle_list));
 	checkError(cudaFree(d_cell_list));
+
+    checkError(cudaFree(d_enemyGridWeight));
+    checkError(cudaFree(d_enemyGridId));
 
 	checkError(cudaFree(d_rigidBodies));
 
