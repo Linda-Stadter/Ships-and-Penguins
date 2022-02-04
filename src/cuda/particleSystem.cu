@@ -331,7 +331,7 @@ __global__ void initCuboidParticles(Saiga::ArrayView<Particle> particles, int id
     rigidBodies[id].particleCount = count;
 }
 
-__global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles, int id, vec3 pos, vec3 sdf, vec4 color, int particleCountRB, RigidBody *rigidBodies, bool fixed=false, float mass=1.0, float particleRadius=0.5) {
+__global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles, int id, vec3 pos, vec3 sdf, vec4 color, int particleCountRB, RigidBody *rigidBodies, bool fixed=false, float mass=1.0, float particleRadius=0.5, bool stripes=true) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > 0)
         return;
@@ -339,6 +339,10 @@ __global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles
     particles[particleCountRB].position = pos;
     particles[particleCountRB].predicted = pos;
     particles[particleCountRB].rbID = id;
+
+    // random wood stripes
+    if (stripes)
+        color = color * (1- (((int)((pos[0]+pos[1])*10) % 7) * 0.07));
 
     particles[particleCountRB].color = color;
 
@@ -362,8 +366,7 @@ __global__ void initRigidBodyParticles(Saiga::ArrayView<Particle> particles, int
 }
 
 // 4.4
-int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color) {
-    Saiga::UnifiedModel model("objs/teapot.obj");
+int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass = 1, float maxObjParticleCount = 30) {
     Saiga::UnifiedMesh mesh = model.CombinedMesh().first;
     std::vector<Triangle> triangles = mesh.TriangleSoup();
     // 1
@@ -372,7 +375,6 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
     vec3 max = bb.max;
     // 2
     // Schnittstellen
-    float maxObjParticleCount = 40;
     float maxSize = bb.maxSize();
     //float sampleDistance = 0.1;
     float sampleDistance = maxSize / maxObjParticleCount;
@@ -479,10 +481,9 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
                     vec3 ori = min + sampleDistance * ivec3{x, y, z}.cast<float>();
                     if (voxel[z][y][x].first) {
                         count++;
-                        float scaling = 1.0f;
                         vec3 position = pos + ori*(scaling / sampleDistance);
                         vec3 sdf = (float)voxel[z][y][x].first * normalize(voxel[z][y][x].second);
-                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies);
+                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, false, particleMass, scaling);
                     }
                 }
             }
@@ -516,7 +517,6 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
                     }
                     if (isInside) {
                         count++;
-                        float scaling = 1.0f;
                         vec3 position = pos + ori * (scaling / sampleDistance);
                         initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, vec3{0.f,0.f,0.f}, color, particleCountRB++, d_rigidBodies);
                     }
@@ -620,7 +620,7 @@ int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, 
                         //float scaling = 0.5f;
                         vec3 position = pos + ori*(scaling / sampleDistance);
                         vec3 sdf = (float)voxel[z][y][x].first * normalize(voxel[z][y][x].second);
-                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, fixed, mass, particleRadius);
+                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, fixed, mass, particleRadius, false);
                     }
                 }
             }
@@ -1038,15 +1038,18 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     if (scenario > 2 && scenario < 8)
         initRigidBodies(distance, scenario);
 
+    std::unordered_map<std::string, float> ship_paramters{{"scaling", 0.17}, {"mass", 0.02}, {"particleCount", 21}};
+    vec4 ship_color ={0.36, 0.23, 0.10, 1};
+    Saiga::UnifiedModel shipModel("objs/ship.obj");
+
     if (scenario == 11 || scenario == 14) {
         vec3 rot = {0,0,0};
         ivec3 dim = {5,5,5};
 
-        color = {1.0, 0., .0, 1};
-
         vec3 pos = {0, 10, 0};
-        int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
-        particleCountRB += dim.x() * dim.y() * dim.z();
+
+        int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        particleCountRB += objParticleCount; 
     }
 
     if (scenario == 14) {
@@ -1060,39 +1063,39 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 1, 0.1, 0.2);
         particleCountRB += dim.x() * dim.y() * dim.z();
 
+
         // spawns enemies
-        dim ={4, 4, 4};
-        color ={.5, 0, .5, 0.5};
         pos ={2, 2.5, 2};
 
         objects["enemy_1"] = rigidBodyCount;
-        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
-        particleCountRB += dim.x() * dim.y() * dim.z();
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        particleCountRB += objParticleCount;
 
         pos ={-15, 2.5, -25};
         objects["enemy_2"] = rigidBodyCount;
-        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
-        particleCountRB += dim.x() * dim.y() * dim.z();
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        particleCountRB += objParticleCount;
 
         pos ={17, 2.5, 10};
         objects["enemy_3"] = rigidBodyCount;
-        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
-        particleCountRB += dim.x() * dim.y() * dim.z();
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        particleCountRB += objParticleCount;
 
         pos ={15, 2.5, -10};
         objects["enemy_4"] = rigidBodyCount;
-        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
-        particleCountRB += dim.x() * dim.y() * dim.z();
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        particleCountRB += objParticleCount;
 
         pos ={5, 2.5, -11};
         objects["enemy_5"] = rigidBodyCount;
-        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
-        particleCountRB += dim.x() * dim.y() * dim.z();
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        particleCountRB += objParticleCount;
 
         pos ={-15, 2.5, -8};
         objects["enemy_6"] = rigidBodyCount;
-        objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 0.2, 0.5, 0.3);
-        particleCountRB += dim.x() * dim.y() * dim.z();
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        particleCountRB += objParticleCount;
+
     }
 
     if (scenario == 14) {
@@ -1176,16 +1179,16 @@ void ParticleSystem::initRigidBodies(float distance, int scenario) {
 
     if (scenario != 3 && scenario != 5 && scenario != 7) {
         color = {.8, .6, .5, 1};
-
+        Saiga::UnifiedModel teapot("objs/teapot.obj");
         pos = linearRand(vec3(-40, 20, -40), vec3(40, 30, 40));
         rot = {0,0,0};
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, color);
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, color, teapot, 1);
         particleCountRB += objParticleCount;
         printf("%i\n", objParticleCount);
 
         pos = {0, 70, 0};
         rot = {0,0,0};
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, color);
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, color, teapot, 1);
         particleCountRB += objParticleCount;
     }
 
@@ -2307,7 +2310,7 @@ __global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particle
     mat3 rotMat = normRotation * rigidBodies[rbID].A;
     rigidBodies[rbID].A = rotMat;
 
-    vec3 direction3d = rigidBodies[rbID].A * vec3{1, 0, 0};
+    vec3 direction3d = rigidBodies[rbID].A * vec3{0, 0, 1};
     vec3 direction2d = {direction3d.x(), 0, direction3d.z()};
     direction2d.normalize();
     rigidBodies[rbID].originOfMass += direction2d * forward * 0.003;
