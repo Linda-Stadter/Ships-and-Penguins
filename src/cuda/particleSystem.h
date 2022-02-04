@@ -54,7 +54,11 @@ class SAIGA_ALIGN(16) ParticleSystem
     void updateRigidBodies();
 
     int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass, float maxParticleCount);
-    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass, float scaling, float particleRadius);
+    int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass, float scaling, float particleRadius, bool noSDF);
+    void spawnShip(vec3 spawnPos, int shipID);
+
+    std::vector<ClothConstraint> clothConstraints;
+    std::vector<ClothBendingConstraint> clothBendingConstraints;
 
     int *d_constraintCounter;
     int *d_constraintList;
@@ -86,7 +90,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     int solver_iterations = 2;
     bool use_calculated_relax_p = true;
 
-    bool test_bool = true;
+    bool test_bool = false;
     float test_float = 0.05;
 
     float cloth_break_distance = 1.0;
