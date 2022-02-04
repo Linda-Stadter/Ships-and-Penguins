@@ -366,7 +366,7 @@ __global__ void initRigidBodyParticles(Saiga::ArrayView<Particle> particles, int
 }
 
 // 4.4
-int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass = 1, float maxObjParticleCount = 30) {
+int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass = 1, float maxObjParticleCount = 30, bool stripes = true) {
     Saiga::UnifiedMesh mesh = model.CombinedMesh().first;
     std::vector<Triangle> triangles = mesh.TriangleSoup();
     // 1
@@ -483,7 +483,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
                         count++;
                         vec3 position = pos + ori*(scaling / sampleDistance);
                         vec3 sdf = (float)voxel[z][y][x].first * normalize(voxel[z][y][x].second);
-                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, false, particleMass, scaling);
+                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, false, particleMass, scaling, stripes);
                     }
                 }
             }
@@ -1009,6 +1009,10 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     vec4 ship_color ={0.36, 0.23, 0.10, 1};
     Saiga::UnifiedModel shipModel("objs/ship.obj");
 
+    std::unordered_map<std::string, float> pengunin_paramters{{"scaling", 0.04}, {"mass", 0.002}, {"particleCount", 35}};
+    Saiga::UnifiedModel penguinModel("objs/penguin.obj");
+    vec4 penguin_color ={0.3, 0.3, 0.3, 0.55};
+
     if (scenario >= 7) {
         color = {0, 0, 0.8, 1};
         rbID = -2; // fluid
@@ -1236,6 +1240,11 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
         particleCountRB += objParticleCount;
 
+        // test penguin
+        pos ={0, 11, 0};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, penguin_color, penguinModel, pengunin_paramters["scaling"], pengunin_paramters["mass"], pengunin_paramters["particleCount"], true);
+        printf("count %i", objParticleCount);
+        particleCountRB += objParticleCount;
     }
 
     if (scenario == 14) {
