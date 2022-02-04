@@ -29,13 +29,13 @@ void ParticleSystem::setDevicePtr(void* particleVbo) {
     d_particles = ArrayView<Particle>((Particle*) particleVbo, particleCount);
 }
 
-__global__ void updateParticlesPBD1_radius(float dt, vec3 gravity, Saiga::ArrayView<Particle>particles, float damp_v, float particleRadiusWater, float particleRadiusCloth) {
+__global__ void updateParticlesPBD1_radius(float dt, vec3 gravity, Saiga::ArrayView<Particle>particles, float damp_v, float particleRadiusWater, float particleRadiusCloth, int exception) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particles.size())
         return;
     Particle &p = particles[ti.thread_id];
 
-    if (p.fixed)
+    if (p.fixed || p.rbID == exception)
         return;
 
     /*
@@ -342,7 +342,7 @@ __global__ void initSingleRigidBodyParticle(Saiga::ArrayView<Particle> particles
 
     // random wood stripes
     if (stripes)
-        color = color * (1- (((int)((pos[0]+pos[1])*10) % 7) * 0.07));
+        color = color * (1- (((int)((pos[0]+pos[1])*30) % 7) * 0.07));
 
     particles[particleCountRB].color = color;
 
@@ -652,12 +652,12 @@ __global__ void caclulateRigidBodyOriginOfMass(Saiga::ArrayView<Particle> partic
     }
 }
 
-__global__ void covariance(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies) {
+__global__ void covariance(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies, int exception) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particleCountRB)
         return;
     Particle &p = particles[ti.thread_id];
-    if (p.rbID >= 0) {
+    if (p.rbID >= 0 && p.rbID != exception) {
         //vec3 pc = p.position - rigidBodies[p.rbID].originOfMass;
         mat3 pcr = (p.predicted - rigidBodies[p.rbID].originOfMass) * p.relative.transpose();
 
@@ -681,14 +681,19 @@ __global__ void SVD(RigidBody *rigidBodies, int rigidBodyCount) {
     rb.A = svd3_cuda::pd(rb.A);
 }
 
-__global__ void resolveRigidBodyConstraints(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies) {
+__global__ void resolveRigidBodyConstraints(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies, int cannon) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particleCountRB)
         return;
     Particle &p = particles[ti.thread_id];
     if (p.rbID >= 0) {
         // dx = (Q*r + c) - p
-        p.predicted += (rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass) - p.predicted;
+        if (p.rbID == cannon) {
+            p.predicted += (rigidBodies[0].A * p.relative + rigidBodies[p.rbID].originOfMass) - p.predicted;
+        }
+        else {
+            p.predicted += (rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass) - p.predicted;
+        }
     }
 }
 
@@ -724,7 +729,7 @@ __global__ void initRigidBodiesRotation(RigidBody *rigidBodies, int rigidBodyCou
 void ParticleSystem::constraintsShapeMatchingRB() {
     updateRigidBodies();
 
-    resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
+    resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies, objects["cannon"]);
     CUDA_SYNC_CHECK_ERROR();    
 }
 
@@ -736,7 +741,7 @@ void ParticleSystem::updateRigidBodies() {
 
     caclulateRigidBodyOriginOfMass<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
     CUDA_SYNC_CHECK_ERROR();
-    covariance<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
+    covariance<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies, objects["cannon"]);
     CUDA_SYNC_CHECK_ERROR();
     SVD<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
@@ -1241,9 +1246,16 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         particleCountRB += objParticleCount;
 
         // test penguin
-        pos ={0, 11, 0};
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, penguin_color, penguinModel, pengunin_paramters["scaling"], pengunin_paramters["mass"], pengunin_paramters["particleCount"], true);
-        printf("count %i", objParticleCount);
+        //pos ={0, 11, 0};
+        //objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, penguin_color, penguinModel, pengunin_paramters["scaling"], pengunin_paramters["mass"], pengunin_paramters["particleCount"], true);
+        //printf("count %i", objParticleCount);
+        //particleCountRB += objParticleCount;
+
+        Saiga::UnifiedModel cannonModel("objs/cannon.obj");
+        pos ={0, 10.3, 0.};
+        vec4 cannon_color ={0.54, 0.79, 0.84, 1.0};
+        objects["cannon"] = rigidBodyCount;
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, cannon_color, cannonModel, 0.05, 0.001, 28, false);
         particleCountRB += objParticleCount;
     }
 
@@ -1775,7 +1787,7 @@ __global__ void createLinkedCellsOptimized(Saiga::ArrayView<Particle> particles,
     }
 }
 
-__global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::ArrayView<Particle> particles, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize) {
+__global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::ArrayView<Particle> particles, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize, int exception) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id < particles.size()) {
         ParticleCalc pa;
@@ -1783,7 +1795,7 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[ti.thread_id]), &pa);
         int rbIDa = particles[ti.thread_id].rbID;
 
-        if (rbIDa == -4)
+        if (rbIDa == -4 || rbIDa == exception)
             return;
 
         ivec3 cell_idx = calculateCellIdx(pa.predicted, cellSize); // actually pa.position but we only load predicted and its identical here
@@ -1804,7 +1816,7 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
             for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
 
                 int rbIDb = particles[neighbor_particle_idx].rbID;
-                if (rbIDb == -4)
+                if (rbIDb == -4 || rbIDb == exception)
                     continue;
                 if ((rbIDa == -1 || rbIDb == -1 || rbIDa != rbIDb) &&
                         (i != 13 || neighbor_particle_idx > ti.thread_id)) {
@@ -2275,6 +2287,17 @@ __device__ int computeTurn(vec3 oldDirection, vec3 newDirection) {
     return turn;
 }
 
+__global__ void moveCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int shipId, int cannonId) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id > 0)
+        return;
+
+    vec3 originOfMassShip = rigidBodies[shipId].originOfMass;
+    vec3 cannonOffset = rigidBodies[shipId].A * vec3(0, 0.9, 0.7);
+    rigidBodies[cannonId].originOfMass = originOfMassShip + cannonOffset;
+
+}
+
 __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, int rbID_start, int rbID_end, float random, int enemyGridDim, float enemyGridCell, int ball) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= rbID_start && ti.thread_id <= rbID_end) {
@@ -2380,14 +2403,14 @@ void ParticleSystem::update(float dt) {
         resetEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_enemyGridWeight, enemyGridDim);
         fillEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, objects["enemy_1"], objects["enemy_6"], random, enemyGridDim, enemyGridCell, objects["ball_1"]);
         
-        updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth);
+        updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth, objects["cannon"]);
 
 
         calculateHash<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
         thrust::sort_by_key(thrust::device_pointer_cast(d_particle_hash), thrust::device_pointer_cast(d_particle_hash) + particleCount, d_particles.device_begin());
         createLinkedCellsOptimized<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
 
-        createConstraintParticlesLinkedCellsRigidBodiesFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize);
+        createConstraintParticlesLinkedCellsRigidBodiesFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, objects["cannon"]);
         createConstraintWalls<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, objects["ball_1"], objects["enemy_6"]);
         
         updateLookupTable<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particleIdLookup);
@@ -2422,7 +2445,8 @@ void ParticleSystem::update(float dt) {
         controlRigidBody(0, control_forward, control_rotate, dt);
         resetEnemyParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, mapDim, fluidDim, objects["enemy_1"], objects["enemy_6"], random, enemyGridDim);
         moveEnemies<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, objects["enemy_1"], objects["enemy_6"], random, enemyGridDim, enemyGridCell, objects["ball_1"]);
-        resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
+        moveCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, 0, objects["cannon"]);
+        resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies, objects["cannon"]);
         CUDA_SYNC_CHECK_ERROR();
 
         updateTrochoidalParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, wave_number, phase_speed, steepness, dt * steps, fluidDim);
