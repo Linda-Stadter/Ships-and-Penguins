@@ -529,7 +529,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
 }
 
 // 4.4
-int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed=false, float mass=1.0, float scaling=1.0, float particleRadius=0.5) {    
+int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed=false, float mass=1.0, float scaling=1.0, float particleRadius=0.5, bool noSDF = false) {    
     vec3 min = {0,0,0};
     int count = 0;
     float sampleDistance = 1.0;
@@ -620,6 +620,8 @@ int ParticleSystem::loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, 
                         //float scaling = 0.5f;
                         vec3 position = pos + ori*(scaling / sampleDistance);
                         vec3 sdf = (float)voxel[z][y][x].first * normalize(voxel[z][y][x].second);
+                        if (noSDF)
+                            sdf = {0, 0, 0};
                         initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, fixed, mass, particleRadius);
                     }
                 }
@@ -866,6 +868,139 @@ __global__ void resetEnemyGrid(int *d_enemyGridWeight, int enemyGridDim) {
     d_enemyGridWeight[ti.thread_id] = 0;
 }
 
+void ParticleSystem::spawnShip(vec3 spawnPos, int shipID) {
+    float randInitMul = 0;
+
+    int upperMastStartId;
+    int lowerMastStartId;
+
+    vec3 rot = {0,0,0};
+
+    color = {1.0, 0., .0, 1};
+
+    ivec3 dim = {4,2,6};
+    vec3 pos = {0, 0, 0};
+    int objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.3, 0.5, 0.3);
+    particleCountRB += dim.x() * dim.y() * dim.z();
+
+    dim = {4,2,2};
+    pos = {0, 0.5, 3};
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.2, 0.5, 0.3);
+    particleCountRB += dim.x() * dim.y() * dim.z();
+
+    // vertical mast
+    dim = {1,24,1};
+    pos = {0.75, 0.5, 1.5};
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, 0.3, true);
+    particleCountRB += dim.x() * dim.y() * dim.z();
+
+    // horizontal upper mast
+    dim = {16,1,1};
+    pos = {-1, 6, 1.5};
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, 0.3, true);
+    particleCountRB += dim.x() * dim.y() * dim.z();
+
+    // sail upper fixture
+    upperMastStartId = particleCountRB;
+    dim = {8,1,1};
+    pos = {-1, 6, 2};
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.5, 0.2, true);
+    particleCountRB += dim.x() * dim.y() * dim.z();
+
+
+    // horizontal lower mast
+    dim = {16,1,1};
+    pos = {-1, 2, 1.5};
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, 0.3, true);
+    particleCountRB += dim.x() * dim.y() * dim.z();
+
+    // sail lower fixture
+    lowerMastStartId = particleCountRB;
+    dim = {8,1,1};
+    pos = {-1, 2, 2};
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.5, 0.2, true);
+    particleCountRB += dim.x() * dim.y() * dim.z();
+
+    rigidBodyCount++;
+
+
+    int rbID = -3;
+    color = {1.0f, 1.0f, 1.0f, 1.f};
+    float distance = 0.5;
+    // ship cloth
+    vec3 clothCorner = {-1, 2.75, 2.5};
+    int dimX = 8;
+    int dimZ = 6;
+    int clothParticleCount = dimX * dimZ;
+    initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, clothParticleCount, dimX, 1, clothCorner + spawnPos, distance, d_particles, randInitMul, 0.35, rbID, color, false, 0.01);
+    // fix upper row
+    //initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, dimX, dimX, 1, clothCorner + spawnPos, distance, d_particles, randInitMul, 0.35, rbID, color, true, 0.1);
+    CUDA_SYNC_CHECK_ERROR();
+
+    //std::vector<ClothConstraint> clothConstraints(0);
+    //std::vector<ClothBendingConstraint> clothBendingConstraints(0);
+
+    // lower fixture
+    /*for (int j = 0; j < dimZ; j++) {
+        for (int i = dimX-1; i < dimX; i++) {
+            int idx = particleCountRB + j * dimX + i;
+            int idx2 = lowerMastStartId + j;
+            clothConstraints.push_back({idx, idx2, 1.1f * distance});
+        }
+    }
+
+    // upper fixture
+    for (int j = 0; j < dimZ; j++) {
+        for (int i = 0; i < 1; i++) {
+            int idx = particleCountRB + j * dimX + i;
+            int idx2 = upperMastStartId + j;
+            clothConstraints.push_back({idx, idx2, 1.1f * distance});
+        }
+    }*/
+
+    // lower fixture
+    //for (int j = 0; j < dimZ; j++) {
+    int j = 0;
+        for (int i = 0; i < dimX; i++) {
+            int idx = particleCountRB + j * dimX + i;
+            int idx2 = lowerMastStartId + i;
+            clothConstraints.push_back({idx, idx2, 1.1f * distance});
+        }
+    //}
+
+    // upper fixture
+    //for (int j = 0; j < dimZ; j++) {
+    j = dimZ-1;
+        for (int i = 0; i < dimX; i++) {
+            int idx = particleCountRB + j * dimX + i;
+            int idx2 = upperMastStartId + i;
+            clothConstraints.push_back({idx, idx2, 1.1f * distance});
+        }
+    //}
+
+    for (int j = 0; j < dimZ; j++) {
+        for (int i = 0; i < dimX; i++) {
+            int idx = particleCountRB + j * dimX + i;
+            if (i < dimX - 1) {
+                clothConstraints.push_back({idx, idx+1, 1.0f * distance});
+            }
+            if (j < dimZ - 1) {
+                clothConstraints.push_back({idx, idx+dimX, 1.0f * distance});
+            }
+            if (j < dimZ - 1 && i < dimX - 1) {
+                if (i+j % 2)
+                    clothConstraints.push_back({idx, idx+dimX+1, 1.4142f*distance});
+                else
+                    clothConstraints.push_back({idx+dimX, idx+1, 1.4142f*distance});
+
+                //clothBendingConstraints.push_back({idx+dimX+1, idx, idx+dimX, idx+1});
+            }
+        }
+    }
+
+    particleCountRB += clothParticleCount;
+}
+
 void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario, vec3 fluidDim, vec3 trochoidal1Dim, vec3 trochoidal2Dim, ivec2 layers) {
     int rbID = -1; // free particles
     vec4 color = {0.0f, 1.0f, 0.0f, 1.f};
@@ -877,6 +1012,10 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         color ={0.1f, 0.2f, 0.8f, 1.f};
         rbID = -4; // trochoidal particles
     }
+
+    // reset cloth constraints
+    clothConstraints = std::vector<ClothConstraint>(0);
+    clothBendingConstraints = std::vector<ClothBendingConstraint>(0);
 
     if (scenario == 13) {
         // scene parameters
@@ -986,10 +1125,6 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         resetParticles<<<BLOCKS, BLOCK_SIZE>>>(x, z, corner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color);
         CUDA_SYNC_CHECK_ERROR();
 
-        std::vector<ClothConstraint> clothConstraints(0);
-
-        std::vector<ClothBendingConstraint> clothBendingConstraints(0);
-
         int dimX = 50;
         int dimZ = 50;
 
@@ -1038,7 +1173,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     if (scenario > 2 && scenario < 8)
         initRigidBodies(distance, scenario);
 
-    if (scenario == 11 || scenario == 14) {
+    if (scenario == 11) {
         vec3 rot = {0,0,0};
         ivec3 dim = {5,5,5};
 
@@ -1050,6 +1185,10 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     }
 
     if (scenario == 14) {
+        // spawn player ship
+        vec3 spawnPos = {5, 2, 5};
+        spawnShip(spawnPos, 0);
+
         vec3 rot ={0, 0, 0};
         ivec3 dim ={3, 3, 3};
 
@@ -1108,10 +1247,6 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, dimX, dimX, 1, clothCorner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color, true, 0.1);
         CUDA_SYNC_CHECK_ERROR();
 
-        std::vector<ClothConstraint> clothConstraints(0);
-
-        std::vector<ClothBendingConstraint> clothBendingConstraints(0);
-
         for (int j = 0; j < dimZ; j++) {
             for (int i = 0; i < dimX; i++) {
                 int idx = particleCountRB + j * dimX + i;
@@ -1133,6 +1268,9 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         }
 
         particleCountRB += clothParticleCount;
+
+        // spawn enemy ship
+        spawnShip({-10, 2, -10}, 1);
 
         size_t clothConstraintSize = sizeof(clothConstraints[0]) * clothConstraints.size();
         size_t clothBendingConstraintSize = sizeof(clothBendingConstraints[0]) * clothBendingConstraints.size();
@@ -1317,11 +1455,11 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
     float d = collideSphereSphere(pa_copy.radius, pb_copy.radius, pa_copy.predicted, pb_copy.predicted);
     vec3 n = (pa_copy.predicted - pb_copy.predicted).normalized();
     
-    if (pa.rbID >= 0 || pb.rbID >= 0) {
-        vec3 sdf1 = pa.sdf;
-        vec3 sdf2 = pb.sdf;
+    vec3 sdf1 = pa.sdf;
+    vec3 sdf2 = pb.sdf;
+    if ((pa.rbID >= 0 && sdf1.norm() > 0) || (pb.rbID >= 0 && sdf2.norm() > 0)) {
         mat3 R;
-        if (pa.rbID >= 0 && pb.rbID >= 0) {
+        if (pa.rbID >= 0 && sdf1.norm() > 0 && pb.rbID >= 0 && sdf2.norm() > 0) {
             Particle pi;
             Particle pj;
             if (sdf1.norm() <= sdf2.norm()) {
@@ -1333,11 +1471,11 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
                 n = -normalize(sdf2);
                 R = rigidBodies[pb.rbID].A;
             }
-        } else if (pa.rbID >= 0) {
+        } else if (pa.rbID >= 0 && sdf1.norm() > 0) {
             d = sdf1.norm();
             n = normalize(sdf1);
             R = rigidBodies[pa.rbID].A;
-        } else if (pb.rbID >= 0) {
+        } else if (pb.rbID >= 0 && sdf2.norm() > 0) {
             d = sdf2.norm();
             n = -normalize(sdf2);
             R = rigidBodies[pb.rbID].A;
@@ -2307,7 +2445,7 @@ __global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particle
     mat3 rotMat = normRotation * rigidBodies[rbID].A;
     rigidBodies[rbID].A = rotMat;
 
-    vec3 direction3d = rigidBodies[rbID].A * vec3{1, 0, 0};
+    vec3 direction3d = rigidBodies[rbID].A * vec3{0, 0, 1};
     vec3 direction2d = {direction3d.x(), 0, direction3d.z()};
     direction2d.normalize();
     rigidBodies[rbID].originOfMass += direction2d * forward * 0.003;
