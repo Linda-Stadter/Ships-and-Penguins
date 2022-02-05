@@ -2258,7 +2258,7 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
 }
 
 // merge this function with kernel
-__device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int rbID, float forward, float rotate, float stabilize = 0.01) {
+__device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 mapDim, vec3 fluidDim, int rbID, float forward, float rotate, float stabilize = 0.01) {
 
     vec3 direction = rigidBodies[rbID].A * vec3{0, 1, 0};
     vec3 directionInit = rigidBodies[rbID].initA * vec3{0, 1, 0};
@@ -2279,9 +2279,10 @@ __device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, Rigid
     direction2d.normalize();
     rigidBodies[rbID].originOfMass += direction2d * forward * 0.003;
 
-    // TODO fix ships in trochoidal area
-    if (rigidBodies[rbID].originOfMass[1] < 2) {
-        rigidBodies[rbID].originOfMass[1] = 2.05;
+    // fix ships in trochoidal area
+    vec3 originOfMass = rigidBodies[rbID].originOfMass;
+    if ((originOfMass[0] <= -mapDim[0]/2 || originOfMass[0] >= mapDim[0]/2 || originOfMass[2] <= -mapDim[2]/2 || originOfMass[2] >= mapDim[2]/2) && rigidBodies[rbID].originOfMass[1] < 2) {
+        rigidBodies[rbID].originOfMass[1] += 0.05;
     }
 }
 
@@ -2370,7 +2371,7 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
 
         int turn = computeTurn(oldDirection, flee);
         float speed = 0.3;
-        moveRigidBodyEnemies(particles, rigidBodies, ti.thread_id, speed, turn, 0.01);
+        moveRigidBodyEnemies(particles, rigidBodies, mapDim, fluidDim, ti.thread_id, speed, turn, 0.01);
     }
 }
 
