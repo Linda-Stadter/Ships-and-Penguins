@@ -873,60 +873,60 @@ __global__ void resetEnemyGrid(int *d_enemyGridWeight, int enemyGridDim) {
     d_enemyGridWeight[ti.thread_id] = 0;
 }
 
-void ParticleSystem::spawnShip(vec3 spawnPos, int shipID) {
+void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedModel shipModel, float scaling, float particleMass = 1, float maxObjParticleCount = 30) {
     float randInitMul = 0;
+
+    vec3 rot = {0,0,0};
+    color = {0.36, 0.23, 0.10, 1};
+    int objParticleCount;
+
+    objParticleCount = loadObj(rigidBodyCount, particleCountRB, spawnPos, rot, ship_color, shipModel, scaling, particleMass, maxObjParticleCount);
+    particleCountRB += objParticleCount;
+
+    vec3 pos;
+    ivec3 dim;
+
+    spawnPos += vec3{-0.8, -0.5, -3};
 
     int upperMastStartId;
     int lowerMastStartId;
 
-    vec3 rot = {0,0,0};
-
-    color = {1.0, 0., .0, 1};
-
-    ivec3 dim = {4,2,6};
-    vec3 pos = {0, 0, 0};
-    int objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.3, 0.5, 0.3);
-    particleCountRB += dim.x() * dim.y() * dim.z();
-
-    dim = {4,2,2};
-    pos = {0, 0.5, 3};
-    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.2, 0.5, 0.3);
-    particleCountRB += dim.x() * dim.y() * dim.z();
+    float mastThickness = 0.2;
+    float fixtureThickness = 0.1;
+    float sailThickness = 0.35;
 
     // vertical mast
     dim = {1,24,1};
     pos = {0.75, 0.5, 1.5};
-    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, 0.3, true);
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, mastThickness, true);
     particleCountRB += dim.x() * dim.y() * dim.z();
 
     // horizontal upper mast
     dim = {16,1,1};
     pos = {-1, 6, 1.5};
-    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, 0.3, true);
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, mastThickness, true);
     particleCountRB += dim.x() * dim.y() * dim.z();
 
     // sail upper fixture
     upperMastStartId = particleCountRB;
     dim = {8,1,1};
     pos = {-1, 6, 2};
-    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.5, 0.2, true);
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.5, fixtureThickness, true);
     particleCountRB += dim.x() * dim.y() * dim.z();
 
 
     // horizontal lower mast
     dim = {16,1,1};
     pos = {-1, 2, 1.5};
-    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, 0.3, true);
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.25, mastThickness, true);
     particleCountRB += dim.x() * dim.y() * dim.z();
 
     // sail lower fixture
     lowerMastStartId = particleCountRB;
     dim = {8,1,1};
     pos = {-1, 2, 2};
-    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.5, 0.2, true);
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.5, fixtureThickness, true);
     particleCountRB += dim.x() * dim.y() * dim.z();
-
-    rigidBodyCount++;
 
 
     int rbID = -3;
@@ -937,13 +937,16 @@ void ParticleSystem::spawnShip(vec3 spawnPos, int shipID) {
     int dimX = 8;
     int dimZ = 6;
     int clothParticleCount = dimX * dimZ;
-    initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, clothParticleCount, dimX, 1, clothCorner + spawnPos, distance, d_particles, randInitMul, 0.35, rbID, color, false, 0.01);
+    initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, clothParticleCount, dimX, 1, clothCorner + spawnPos, distance, d_particles, randInitMul, sailThickness, rbID, color, false, 0.01);
+
     // fix upper row
     //initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, dimX, dimX, 1, clothCorner + spawnPos, distance, d_particles, randInitMul, 0.35, rbID, color, true, 0.1);
     CUDA_SYNC_CHECK_ERROR();
 
     //std::vector<ClothConstraint> clothConstraints(0);
     //std::vector<ClothBendingConstraint> clothBendingConstraints(0);
+
+    int constraintsStart = clothConstraints.size();
 
     // lower fixture
     /*for (int j = 0; j < dimZ; j++) {
@@ -1003,6 +1006,18 @@ void ParticleSystem::spawnShip(vec3 spawnPos, int shipID) {
         }
     }
 
+    shipInfos.push_back({0,
+        rigidBodyCount,
+        particleCountRB,
+        particleCountRB + clothParticleCount,
+        constraintsStart,
+        (int)clothConstraints.size(),
+        0}
+    );
+    
+
+    rigidBodyCount++;
+
     particleCountRB += clothParticleCount;
 }
 
@@ -1011,12 +1026,12 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     vec4 color = {0.0f, 1.0f, 0.0f, 1.f};
 
     std::unordered_map<std::string, float> ship_paramters{{"scaling", 0.17}, {"mass", 0.02}, {"particleCount", 21}};
-    vec4 ship_color ={0.36, 0.23, 0.10, 1};
+    vec4 ship_color = {0.36, 0.23, 0.10, 1};
     Saiga::UnifiedModel shipModel("objs/ship.obj");
 
     std::unordered_map<std::string, float> pengunin_paramters{{"scaling", 0.04}, {"mass", 0.002}, {"particleCount", 35}};
     Saiga::UnifiedModel penguinModel("objs/penguin.obj");
-    vec4 penguin_color ={0.3, 0.3, 0.3, 0.55};
+    vec4 penguin_color = {0.3, 0.3, 0.3, 0.55};
 
     if (scenario >= 7) {
         color = {0, 0, 0.8, 1};
@@ -1200,7 +1215,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     if (scenario == 14) {
         // spawn player ship
         vec3 spawnPos = {5, 2, 5};
-        spawnShip(spawnPos, 0);
+        //spawnShip(spawnPos, 0);
 
         vec3 rot ={0, 0, 0};
         ivec3 dim ={3, 3, 3};
@@ -1217,33 +1232,27 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         pos ={2, 2.5, 2};
 
         objects["enemy_1"] = rigidBodyCount;
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
-        particleCountRB += objParticleCount;
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
         pos ={-15, 2.5, -25};
         objects["enemy_2"] = rigidBodyCount;
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
-        particleCountRB += objParticleCount;
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
         pos ={17, 2.5, 10};
         objects["enemy_3"] = rigidBodyCount;
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
-        particleCountRB += objParticleCount;
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
         pos ={15, 2.5, -10};
         objects["enemy_4"] = rigidBodyCount;
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
-        particleCountRB += objParticleCount;
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
         pos ={5, 2.5, -11};
         objects["enemy_5"] = rigidBodyCount;
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
-        particleCountRB += objParticleCount;
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
         pos ={-15, 2.5, -8};
         objects["enemy_6"] = rigidBodyCount;
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
-        particleCountRB += objParticleCount;
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
         // test penguin
         //pos ={0, 11, 0};
@@ -1295,7 +1304,9 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         particleCountRB += clothParticleCount;
 
         // spawn enemy ship
-        spawnShip({-10, 2, -10}, 1);
+        //spawnShip({-10, 2, -10}, 1);
+
+        // copy constraints
 
         size_t clothConstraintSize = sizeof(clothConstraints[0]) * clothConstraints.size();
         size_t clothBendingConstraintSize = sizeof(clothBendingConstraints[0]) * clothBendingConstraints.size();
@@ -1307,6 +1318,13 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         cudaMemcpy(d_constraintListClothBending, clothBendingConstraints.data(), clothBendingConstraintSize, cudaMemcpyHostToDevice);
         cudaMemcpy(d_constraintCounterCloth, &distanceConstraintCount, sizeof(int) * 1, cudaMemcpyHostToDevice);
         cudaMemcpy(d_constraintCounterClothBending, &bendingConstraintCount, sizeof(int) * 1, cudaMemcpyHostToDevice);
+
+        // copy ship info
+
+        size_t shipInfosSize = sizeof(shipInfos[0]) * shipInfos.size();
+        int shipInfosCount = shipInfos.size();
+        cudaMemcpy(d_shipInfos, shipInfos.data(), shipInfosSize, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_shipInfosCounter, &shipInfosCount, sizeof(int) * 1, cudaMemcpyHostToDevice);
     }
 
     if (scenario > 2 && scenario != 6 && scenario != 7 && scenario < 7)
@@ -1434,7 +1452,7 @@ __global__ void createConstraintWalls(Saiga::ArrayView<Particle> particles, Saig
     Particle p = particles[ti.thread_id];
 
     for (int i = 0; i < walls.size(); i++) {
-        if (p.rbID >= exception_start && p.rbID <= exception_end && i > 0) {
+        if (p.rbID >= exception_start && p.rbID <= exception_end && i > 0 || p.rbID == -3) {
             // only consider ground plane for rigid body execptions
             return;
         }

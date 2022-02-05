@@ -27,6 +27,16 @@ struct ClothBendingConstraint {
     int id4;
 };
 
+struct ShipInfo {
+    int id;
+    int rbID;
+    int clothStart;
+    int clothEnd;
+    int constraintsStart;
+    int constraintsEnd;
+    int penguinID;
+};
+
 class SAIGA_ALIGN(16) ParticleSystem
 {
    public:
@@ -55,10 +65,15 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass, float maxParticleCount, bool stripes);
     int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass, float scaling, float particleRadius, bool noSDF);
-    void spawnShip(vec3 spawnPos, int shipID);
+    void spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedModel shipModel, float scaling, float particleMass, float maxObjParticleCount);
 
     std::vector<ClothConstraint> clothConstraints;
     std::vector<ClothBendingConstraint> clothBendingConstraints;
+    std::vector<ShipInfo> shipInfos;
+
+    ShipInfo *d_shipInfos;
+    int *d_shipInfosCounter;
+    int maxShipNum = 20;
 
     int *d_constraintCounter;
     int *d_constraintList;

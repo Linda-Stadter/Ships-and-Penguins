@@ -22,8 +22,12 @@ ParticleSystem::ParticleSystem(int _particleCount, vec3 _boxMin, vec3 _boxDim)
     checkError(cudaMalloc((void **)&d_constraintListClothBending, sizeof(ClothBendingConstraint) * maxConstraintNumClothBending));
     checkError(cudaMalloc((void **)&d_constraintCounterClothBending, sizeof(int)));
 
+    checkError(cudaMalloc((void **)&d_shipInfos, sizeof(ClothConstraint) * maxShipNum));
+    checkError(cudaMalloc((void **)&d_shipInfosCounter, sizeof(int)));
+
     clothConstraints = std::vector<ClothConstraint>(0);
     clothBendingConstraints = std::vector<ClothBendingConstraint>(0);
+    shipInfos = std::vector<ShipInfo>(0);
 
     checkError(cudaMalloc((void **)&d_particleIdLookup, sizeof(int) * particleCount));
 
