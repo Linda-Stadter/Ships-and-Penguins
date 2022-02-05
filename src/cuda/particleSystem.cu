@@ -1222,11 +1222,13 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
 
         color ={.5, .5, .5, 0.5};
         vec3 pos ={0, 20, 0};
-        // spawns cannonball
-        objects["ball_1"] = rigidBodyCount;
-        int objParticleCount = loadBox(rigidBodyCount++, particleCountRB, dim, pos, rot, color, false, 1, 0.1, 0.2);
-        particleCountRB += dim.x() * dim.y() * dim.z();
 
+        // spawns cannonball
+        Saiga::UnifiedModel fishModel("objs/fish.obj");
+        objects["ball_1"] = rigidBodyCount;
+        vec4 fish_color ={0.77, 0.65, 0.46, 1};
+        int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, fish_color, fishModel, 0.05, 0.05, 15, false);
+        particleCountRB += objParticleCount;
 
         // spawns enemies
         pos ={2, 2.5, 2};
