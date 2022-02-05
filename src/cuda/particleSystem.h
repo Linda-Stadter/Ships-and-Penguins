@@ -18,6 +18,7 @@ struct ClothConstraint {
     int first;
     int second;
     float dist;
+    int active;
 };
 
 struct ClothBendingConstraint {
