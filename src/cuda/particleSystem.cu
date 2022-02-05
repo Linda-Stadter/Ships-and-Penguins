@@ -1229,28 +1229,27 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
 
 
         // spawns enemies
-        pos ={2, 2.5, 2};
-
+        pos ={2, 4, 2};
         objects["enemy_1"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={-15, 2.5, -25};
+        pos ={-15, 4, -25};
         objects["enemy_2"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={17, 2.5, 10};
+        pos ={17, 4, 10};
         objects["enemy_3"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={15, 2.5, -10};
+        pos ={15, 4, -10};
         objects["enemy_4"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={5, 2.5, -11};
+        pos ={5, 4, -11};
         objects["enemy_5"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={-15, 2.5, -8};
+        pos ={-15, 4, -8};
         objects["enemy_6"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
@@ -2281,8 +2280,8 @@ __device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, Rigid
 
     // fix ships in trochoidal area
     vec3 originOfMass = rigidBodies[rbID].originOfMass;
-    if ((originOfMass[0] <= -mapDim[0]/2 || originOfMass[0] >= mapDim[0]/2 || originOfMass[2] <= -mapDim[2]/2 || originOfMass[2] >= mapDim[2]/2) && rigidBodies[rbID].originOfMass[1] < 2) {
-        rigidBodies[rbID].originOfMass[1] += 0.05;
+    if ((originOfMass[0] <= -fluidDim[0]/2 || originOfMass[0] >= fluidDim[0]/2 || originOfMass[2] <= -fluidDim[2]/2 || originOfMass[2] >= fluidDim[2]/2) && rigidBodies[rbID].originOfMass[1] < 3) {
+        rigidBodies[rbID].originOfMass[1] += 0.005;
     }
 }
 
