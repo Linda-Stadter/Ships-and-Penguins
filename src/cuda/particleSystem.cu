@@ -2199,17 +2199,18 @@ __global__ void updateTrochoidalParticles(Saiga::ArrayView<Particle> d_particles
     }
 }
 
-__global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 direction, vec3 ship_position, vec3 speed, int shipId, int rbID) {
+__global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 direction, vec3 ship_position, float speed, int shipId, int ballId, int cannonId) {
     Saiga::CUDA::ThreadInfo<> ti;
-    if (ti.thread_id > particles.size() || particles[ti.thread_id].rbID != rbID)
+    if (ti.thread_id > particles.size() || particles[ti.thread_id].rbID != ballId)
         return;
     Particle &p = particles[ti.thread_id];
+    vec3 initialCannonDirection = vec3(0, 0.5, 1);
+    initialCannonDirection.normalize();
+    p.velocity = (rigidBodies[cannonId].A * initialCannonDirection) * speed;
 
-    p.velocity = {direction[0] * speed[0], speed[1], direction[2] * speed[2]};
-
-    vec3 cannonOffset = rigidBodies[shipId].A * vec3(0, 0.9, 0.7);
+    vec3 cannonOffset = rigidBodies[shipId].A * vec3(0, 0.9, 0.8);
     // spawn cannonball at ship_position
-    rigidBodies[rbID].originOfMass = ship_position + cannonOffset;
+    rigidBodies[ballId].originOfMass = ship_position + cannonOffset;
     // change position of each particle
     p.position = rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass;
 }
@@ -2359,9 +2360,17 @@ __global__ void moveCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigi
     if (cameraDirection[2] < 0 && cameraDirection[0] >= 0) {
         z_angle = M_PI/2 + (M_PI/2 - atanf(cameraDirection[0] / abs(cameraDirection[2])));
     }
-    
-    // apply angle on y axis
-    rigidBodies[cannonId].A = Eigen::AngleAxisf(0, Eigen::Vector3f::UnitX()) * Eigen::AngleAxisf(z_angle, Eigen::Vector3f::UnitY()) * Eigen::AngleAxisf(0, Eigen::Vector3f::UnitZ());
+
+    // compute angle between xz plane and y component of vector
+    vec3 plane_vec = vec3(cameraDirection[0], 0, cameraDirection[2]);
+    float plane_angle =  -atanf(cameraDirection[1]/plane_vec.norm());
+
+    // clamp angle to min and max values
+    plane_angle = max(-M_PI/4, plane_angle);
+    plane_angle = min(0.26, plane_angle);
+
+    // apply rotation on y axis first, then x axis
+    rigidBodies[cannonId].A = Eigen::AngleAxisf(z_angle, Eigen::Vector3f::UnitY()) * Eigen::AngleAxisf(plane_angle, Eigen::Vector3f::UnitX()) * Eigen::AngleAxisf(0, Eigen::Vector3f::UnitZ());
 }
 
 __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, int rbID_start, int rbID_end, float random, int enemyGridDim, float enemyGridCell, int ball) {
@@ -2461,7 +2470,7 @@ void ParticleSystem::update(float dt) {
         resetCellListOptimized<<<BLOCKS_CELLS, BLOCK_SIZE>>>(d_cell_list, cellCount, particleCount);
 
         if (control_cannonball == 1 && cannon_timer >= cannon_timer_reset) {
-            shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, ship_position, cannonball_speed, objects["player"], objects["ball_1"]);
+            shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, ship_position, cannonball_speed, objects["player"], objects["ball_1"], objects["cannon"]);
             cannon_timer = 0;
         }
 
