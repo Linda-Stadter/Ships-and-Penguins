@@ -1267,40 +1267,6 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     }
 
     if (scenario == 14) {
-        // spawns cloth
-        rbID = -3; // free particles
-        vec4 color = {1.0f, 1.0f, 1.0f, 1.f};
-        vec3 clothCorner {-20, 10, -20};
-        int dimX = 10;
-        int dimZ = 10;
-        int clothParticleCount = dimX * dimZ;
-        initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, clothParticleCount, dimX, dimZ, clothCorner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color, false, 0.1);
-        // fix upper row
-        initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, dimX, dimX, 1, clothCorner, distance, d_particles, randInitMul, particleRenderRadius, rbID, color, true, 0.1);
-        CUDA_SYNC_CHECK_ERROR();
-
-        for (int j = 0; j < dimZ; j++) {
-            for (int i = 0; i < dimX; i++) {
-                int idx = particleCountRB + j * dimX + i;
-                if (i < dimX - 1) {
-                    clothConstraints.push_back({idx, idx+1, 1.0f * distance, 1});
-                }
-                if (j < dimZ - 1) {
-                    clothConstraints.push_back({idx, idx+dimX, 1.0f * distance, 1});
-                }
-                if (j < dimZ - 1 && i < dimX - 1) {
-                    if (i+j % 2)
-                        clothConstraints.push_back({idx, idx+dimX+1, 1.4142f*distance, 1});
-                    else
-                        clothConstraints.push_back({idx+dimX, idx+1, 1.4142f*distance, 1});
-
-                    clothBendingConstraints.push_back({idx+dimX+1, idx, idx+dimX, idx+1});
-                }
-            }
-        }
-
-        particleCountRB += clothParticleCount;
-
         // spawn enemy ship
         //spawnShip({-10, 2, -10}, 1);
 
@@ -1531,6 +1497,8 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
             } else {
                 n = xij;
             }
+        } else {
+            d *= pa_copy.radius + pb_copy.radius;
         }
         n = -n;
     }
@@ -1923,7 +1891,9 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
                     int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
-                        //int rbIDb = particles[neighbor_particle_idx].rbID;
+                        int rbIDb = particles[neighbor_particle_idx].rbID;
+                        if (!(rbIDb == -2 || rbIDb == -4))
+                            continue;
                         
                         vec3 d_p = pa.predicted - pb.predicted;
 
@@ -2291,16 +2261,19 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
 
                 float scaling = 0.5;
                 pos *= scaling;
-                vec3 offset = vec3{-0.8, -0.5, -3}; // from spawnPos
+                //vec3 offset = vec3{-0.8, -0.5, -3}; // from spawnPos
+                vec3 offset = vec3{-0.8, -0.5, -2}; // from spawnPos
                 vec3 clothCorner = {-1, 2.75, 2.5};
                 pos += clothCorner + offset;
 
                 p.position = originOfMass + pos;
                 p.predicted = p.position;
+                p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
             } else if (particle) {
                 p.position = rigidBodies[shipInfo.rbID].initA * p.relative + originOfMass;
                 p.predicted = p.position;
+                p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
             }
             if (constraint) {
@@ -2335,8 +2308,11 @@ __device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, Rigid
 
     // fix ships in trochoidal area
     vec3 originOfMass = rigidBodies[rbID].originOfMass;
-    if ((originOfMass[0] <= -fluidDim[0]/2 || originOfMass[0] >= fluidDim[0]/2 || originOfMass[2] <= -fluidDim[2]/2 || originOfMass[2] >= fluidDim[2]/2) && rigidBodies[rbID].originOfMass[1] < 3) {
-        rigidBodies[rbID].originOfMass[1] += 0.005;
+    if (originOfMass[0] <= -fluidDim[0]/2 || originOfMass[0] >= fluidDim[0]/2 || originOfMass[2] <= -fluidDim[2]/2 || originOfMass[2] >= fluidDim[2]/2) {
+        if (originOfMass[1] < 2.5)
+            rigidBodies[rbID].originOfMass[1] += 0.003;
+        if (originOfMass[1] < 2)
+            rigidBodies[rbID].originOfMass[1] = 2;
     }
 }
 
