@@ -888,7 +888,12 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
 
     float mastThickness = 0.2;
     float fixtureThickness = 0.1;
-    float sailThickness = 0.35;
+
+    // cloth
+    float sailThickness = 0.2;
+    float clothDistance = 0.25;
+    int dimX = 16;
+    int dimZ = 10;
 
     // vertical mast
     dim = {1,24,1};
@@ -904,9 +909,9 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
 
     // sail upper fixture
     upperMastStartId = particleCountRB;
-    dim = {8,1,1};
+    dim = {dimX,1,1};
     pos = {-1, 6, 2};
-    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.5, fixtureThickness, true);
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, clothDistance, fixtureThickness, true);
     particleCountRB += dim.x() * dim.y() * dim.z();
 
 
@@ -918,24 +923,22 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
 
     // sail lower fixture
     lowerMastStartId = particleCountRB;
-    dim = {8,1,1};
+    dim = {dimX,1,1};
     pos = {-1, 2, 2};
-    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, 0.5, fixtureThickness, true);
+    objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, clothDistance, fixtureThickness, true);
     particleCountRB += dim.x() * dim.y() * dim.z();
 
 
+    // ship cloth
     int rbID = -3;
     color = {1.0f, 1.0f, 1.0f, 1.f};
-    float distance = 0.5;
-    // ship cloth
+    
     vec3 clothCorner = {-1, 2.75, 2.5};
-    int dimX = 8;
-    int dimZ = 6;
     int clothParticleCount = dimX * dimZ;
-    initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, clothParticleCount, dimX, 1, clothCorner + spawnPos, distance, d_particles, randInitMul, sailThickness, rbID, color, false, 0.01);
+    initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, clothParticleCount, dimX, 1, clothCorner + spawnPos, clothDistance, d_particles, randInitMul, sailThickness, rbID, color, false, 0.01);
 
     // fix upper row
-    //initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, dimX, dimX, 1, clothCorner + spawnPos, distance, d_particles, randInitMul, 0.35, rbID, color, true, 0.1);
+    //initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, dimX, dimX, 1, clothCorner + spawnPos, clothDistance, d_particles, randInitMul, 0.35, rbID, color, true, 0.1);
     CUDA_SYNC_CHECK_ERROR();
 
     //std::vector<ClothConstraint> clothConstraints(0);
@@ -950,7 +953,7 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
         for (int i = dimX-1; i < dimX; i++) {
             int idx = particleCountRB + j * dimX + i;
             int idx2 = lowerMastStartId + j;
-            clothConstraints.push_back({idx, idx2, 1.1f * distance, initActiveState});
+            clothConstraints.push_back({idx, idx2, 1.1f * clothDistance, initActiveState});
         }
     }
 
@@ -959,7 +962,7 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
         for (int i = 0; i < 1; i++) {
             int idx = particleCountRB + j * dimX + i;
             int idx2 = upperMastStartId + j;
-            clothConstraints.push_back({idx, idx2, 1.1f * distance, initActiveState});
+            clothConstraints.push_back({idx, idx2, 1.1f * clothDistance, initActiveState});
         }
     }*/
 
@@ -969,7 +972,7 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
         for (int i = 0; i < dimX; i++) {
             int idx = particleCountRB + j * dimX + i;
             int idx2 = lowerMastStartId + i;
-            clothConstraints.push_back({idx, idx2, 1.1f * distance, initActiveState});
+            clothConstraints.push_back({idx, idx2, 1.1f * clothDistance, initActiveState});
         }
     //}
 
@@ -979,7 +982,7 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
         for (int i = 0; i < dimX; i++) {
             int idx = particleCountRB + j * dimX + i;
             int idx2 = upperMastStartId + i;
-            clothConstraints.push_back({idx, idx2, 1.1f * distance, initActiveState});
+            clothConstraints.push_back({idx, idx2, 1.1f * clothDistance, initActiveState});
         }
     //}
 
@@ -987,16 +990,16 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
         for (int i = 0; i < dimX; i++) {
             int idx = particleCountRB + j * dimX + i;
             if (i < dimX - 1) {
-                clothConstraints.push_back({idx, idx+1, 1.0f * distance, initActiveState});
+                clothConstraints.push_back({idx, idx+1, 1.0f * clothDistance, initActiveState});
             }
             if (j < dimZ - 1) {
-                clothConstraints.push_back({idx, idx+dimX, 1.0f * distance, initActiveState});
+                clothConstraints.push_back({idx, idx+dimX, 1.0f * clothDistance, initActiveState});
             }
             if (j < dimZ - 1 && i < dimX - 1) {
                 if (i+j % 2)
-                    clothConstraints.push_back({idx, idx+dimX+1, 1.4142f*distance, initActiveState});
+                    clothConstraints.push_back({idx, idx+dimX+1, 1.4142f*clothDistance, initActiveState});
                 else
-                    clothConstraints.push_back({idx+dimX, idx+1, 1.4142f*distance, initActiveState});
+                    clothConstraints.push_back({idx+dimX, idx+1, 1.4142f*clothDistance, initActiveState});
 
                 //clothBendingConstraints.push_back({idx+dimX+1, idx, idx+dimX, idx+1});
             }
@@ -1225,7 +1228,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         Saiga::UnifiedModel fishModel("objs/fish.obj");
         objects["ball_1"] = rigidBodyCount;
         vec4 fish_color ={0.77, 0.65, 0.46, 1};
-        int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, fish_color, fishModel, 0.05, 0.05, 15, false);
+        int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, fish_color, fishModel, 0.05, 0.01, 15, false);
         particleCountRB += objParticleCount;
 
         // spawns enemies
@@ -2251,7 +2254,7 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
         if (originOfMass[0] <= -mapDim[0]/2 || originOfMass[0] >= mapDim[0]/2 || originOfMass[2] <= -mapDim[2]/2 || originOfMass[2] >= mapDim[2]/2) {
             originOfMass = {-fluidDim[0]/2 * random, 3, -mapDim[2]/2 + 3};
             if (cloth) {
-                int x = 8;
+                int x = 16; // has to be dimX from spawn
                 int z = 1;
                 int idx = p.id - shipInfo.clothStart;
 
@@ -2260,7 +2263,7 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
                 int yPos = (((idx - xPos) / x) - zPos) / z;
                 vec3 pos = {xPos, yPos, zPos};
 
-                float scaling = 0.5;
+                float scaling = 0.25; // has to be clothDistance from spawn
                 pos *= scaling;
                 //vec3 offset = vec3{-0.8, -0.5, -3}; // from spawnPos
                 vec3 offset = vec3{-0.8, -0.5, -2}; // from spawnPos
@@ -2486,8 +2489,11 @@ void ParticleSystem::update(float dt) {
         float calculatedRelaxP = relax_p;
 
         for (int i = 0; i < solver_iterations; i++) {
-            computeDensityAndLambda<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, omega_lambda_relax, particle_radius_rest_density, fluidDim);
-            updateParticlesPBD2IteratorFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, particle_radius_rest_density, artificial_pressure_k, artificial_pressure_n, w_poly_d_q);
+            if (i == 0) { // only calculate fluid stuff once (performance)
+                computeDensityAndLambda<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, omega_lambda_relax, particle_radius_rest_density, fluidDim);
+                updateParticlesPBD2IteratorFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, h, epsilon_spiky, particle_radius_rest_density, artificial_pressure_k, artificial_pressure_n, w_poly_d_q);
+            }
+            
             if (use_calculated_relax_p) {
                 calculatedRelaxP = 1 - pow(1 - calculatedRelaxP, 1.0/(i+1));
             }
