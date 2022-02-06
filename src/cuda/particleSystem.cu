@@ -1534,6 +1534,8 @@ __global__ void solverPBDParticlesSDF(Saiga::ArrayView<Particle> particles, int 
             } else {
                 n = xij;
             }
+        } else {
+            d *= pa_copy.radius + pb_copy.radius;
         }
         n = -n;
     }
@@ -2296,16 +2298,19 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
 
                 float scaling = 0.5;
                 pos *= scaling;
-                vec3 offset = vec3{-0.8, -0.5, -3}; // from spawnPos
+                //vec3 offset = vec3{-0.8, -0.5, -3}; // from spawnPos
+                vec3 offset = vec3{-0.8, -0.5, -2}; // from spawnPos
                 vec3 clothCorner = {-1, 2.75, 2.5};
                 pos += clothCorner + offset;
 
                 p.position = originOfMass + pos;
                 p.predicted = p.position;
+                p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
             } else if (particle) {
                 p.position = rigidBodies[shipInfo.rbID].initA * p.relative + originOfMass;
                 p.predicted = p.position;
+                p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
             }
             if (constraint) {
@@ -2340,8 +2345,11 @@ __device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, Rigid
 
     // fix ships in trochoidal area
     vec3 originOfMass = rigidBodies[rbID].originOfMass;
-    if ((originOfMass[0] <= -fluidDim[0]/2 || originOfMass[0] >= fluidDim[0]/2 || originOfMass[2] <= -fluidDim[2]/2 || originOfMass[2] >= fluidDim[2]/2) && rigidBodies[rbID].originOfMass[1] < 3) {
-        rigidBodies[rbID].originOfMass[1] += 0.005;
+    if (originOfMass[0] <= -fluidDim[0]/2 || originOfMass[0] >= fluidDim[0]/2 || originOfMass[2] <= -fluidDim[2]/2 || originOfMass[2] >= fluidDim[2]/2) {
+        if (originOfMass[1] < 2.5)
+            rigidBodies[rbID].originOfMass[1] += 0.003;
+        if (originOfMass[1] < 2)
+            rigidBodies[rbID].originOfMass[1] = 2;
     }
 }
 
