@@ -2217,7 +2217,7 @@ __global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rig
     p.position = rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass;
 }
 
-__global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, ClothConstraint *d_constraintListCloth, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim) {
+__global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, ClothConstraint *d_constraintListCloth, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim) {   
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > particles.size())
         return;
@@ -2275,7 +2275,7 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
                 p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
             } else if (particle) {
-                p.position = rigidBodies[shipInfo.rbID].initA * p.relative + originOfMass;
+                p.position = rigidBodies[shipInfo.rbID].A * p.relative + originOfMass;
                 p.predicted = p.position;
                 p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
