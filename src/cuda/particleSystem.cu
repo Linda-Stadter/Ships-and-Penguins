@@ -1926,7 +1926,9 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
                     int end_idx = cell_list[neighbor_flat_idx].second + neighbor_particle_idx;
                     for (; neighbor_particle_idx < end_idx; neighbor_particle_idx++) {
                         Saiga::CUDA::vectorCopy(reinterpret_cast<ParticleCalc*>(&particles[neighbor_particle_idx]), &pb);
-                        //int rbIDb = particles[neighbor_particle_idx].rbID;
+                        int rbIDb = particles[neighbor_particle_idx].rbID;
+                        if (!(rbIDb == -2 || rbIDb == -4))
+                            continue;
                         
                         vec3 d_p = pa.predicted - pb.predicted;
 
