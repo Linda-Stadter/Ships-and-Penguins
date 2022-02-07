@@ -875,6 +875,8 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     color = {0.36, 0.23, 0.10, 1};
     int objParticleCount;
 
+    int particleShipStart = particleCountRB;
+
     objParticleCount = loadObj(rigidBodyCount, particleCountRB, spawnPos, rot, ship_color, shipModel, scaling, particleMass, maxObjParticleCount);
     particleCountRB += objParticleCount;
 
@@ -885,6 +887,7 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
 
     int upperMastStartId;
     int lowerMastStartId;
+
 
     float mastThickness = 0.2;
     float fixtureThickness = 0.1;
@@ -942,9 +945,9 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos + spawnPos, rot, penguin_color, penguinModel, penguin_paramters["scaling"], penguin_paramters["mass"], penguin_paramters["particleCount"], false);
     particleCountRB += objParticleCount;
 
-    clothConstraints.push_back({335, 44, 0, 0});
-    clothConstraints.push_back({334, 43, 0, 0});
-    clothConstraints.push_back({335, 45, 0, 0});
+    clothConstraints.push_back({particleShipStart + 535, particlePenguinStart + 84, 0, 0});
+    clothConstraints.push_back({particleShipStart + 534, particlePenguinStart + 83, 0, 0});
+    clothConstraints.push_back({particleShipStart + 536, particlePenguinStart + 85, 0, 0});
 
 
 
@@ -2297,12 +2300,12 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
                 p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
             } else if (ship) {
-                p.position = rigidBodies[shipInfo.rbID].A * p.relative + originOfMass;
+                p.position = rigidBodies[shipRbId].A * p.relative + originOfMass;
                 p.predicted = p.position;
                 p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
             } else if (penguin) {
-                vec3 pos = {0.8, 0.7, 2.5};
+                vec3 pos = {0.5, 0.7, 1.5};
                 p.position = rigidBodies[shipInfo.penguinID].A * p.relative + originOfMass + pos;
                 p.predicted = p.position;
                 p.d_predicted = {0, 0, 0};
@@ -2406,10 +2409,13 @@ __global__ void moveCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigi
 __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim, float enemyGridCell, int ball) {
     Saiga::CUDA::ThreadInfo<> ti;
     bool is_ship_rbID = false;
+    int penguinID;
     for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx++) {
         ShipInfo &shipInfo = d_shipInfos[shipIdx];
-        if (ti.thread_id == shipInfo.rbID)
+        if (ti.thread_id == shipInfo.rbID) {
             is_ship_rbID = true;
+            penguinID = shipInfo.penguinID;
+        }
     }
     if (is_ship_rbID) {
         vec3 originOfMass = rigidBodies[ti.thread_id].originOfMass;
@@ -2418,6 +2424,10 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
             // reset
             originOfMass ={-fluidDim[0]/2 * random, 3, -mapDim[2]/2 + 3};
             rigidBodies[ti.thread_id].originOfMass = originOfMass;
+
+            // penguin
+            vec3 pos = {0.5, 0.7, 1.5};
+            rigidBodies[penguinID].originOfMass = originOfMass + pos;
             return;
         }
 
@@ -2464,6 +2474,8 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
         int turn = computeTurn(oldDirection, flee);
         float speed = 0.3;
         moveRigidBodyEnemies(particles, rigidBodies, mapDim, fluidDim, ti.thread_id, speed, turn, 0.01);
+        // also stabilize penguin
+        moveRigidBodyEnemies(particles, rigidBodies, mapDim, fluidDim, penguinID, 0, 0, 0.05); // TODO extra function for stabilize only?
     }
 }
 
