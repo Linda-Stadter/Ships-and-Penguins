@@ -2242,7 +2242,7 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
     
     Particle &p = particles[ti.thread_id];
 
-    for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx ++) {
+    for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx++) {
         ShipInfo &shipInfo = d_shipInfos[shipIdx];
 
         int shipRbId = -1;
@@ -2403,9 +2403,15 @@ __global__ void moveCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigi
     rigidBodies[cannonId].A = Eigen::AngleAxisf(z_angle, Eigen::Vector3f::UnitY()) * Eigen::AngleAxisf(plane_angle, Eigen::Vector3f::UnitX()) * Eigen::AngleAxisf(0, Eigen::Vector3f::UnitZ());
 }
 
-__global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, int rbID_start, int rbID_end, float random, int enemyGridDim, float enemyGridCell, int ball) {
+__global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim, float enemyGridCell, int ball) {
     Saiga::CUDA::ThreadInfo<> ti;
-    if (ti.thread_id >= rbID_start && ti.thread_id <= rbID_end) {
+    bool is_ship_rbID = false;
+    for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx++) {
+        ShipInfo &shipInfo = d_shipInfos[shipIdx];
+        if (ti.thread_id == shipInfo.rbID)
+            is_ship_rbID = true;
+    }
+    if (is_ship_rbID) {
         vec3 originOfMass = rigidBodies[ti.thread_id].originOfMass;
 
         if (originOfMass[0] <= -mapDim[0]/2 || originOfMass[0] >= mapDim[0]/2 || originOfMass[2] <= -mapDim[2]/2 || originOfMass[2] >= mapDim[2]/2) {
@@ -2461,9 +2467,15 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
     }
 }
 
-__global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, int rbID_start, int rbID_end, float random, int enemyGridDim, float enemyGridCell, int ball) {
+__global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim, float enemyGridCell, int ball) {
     Saiga::CUDA::ThreadInfo<> ti;
-    if ((ti.thread_id >= rbID_start && ti.thread_id <= rbID_end) || ti.thread_id == 0 || ti.thread_id == ball) {
+    bool is_ship_rbID = false;
+    for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx++) {
+        ShipInfo &shipInfo = d_shipInfos[shipIdx];
+        if (ti.thread_id == shipInfo.rbID)
+            is_ship_rbID = true;
+    }
+    if (is_ship_rbID || ti.thread_id == 0 || ti.thread_id == ball) {
 
         vec3 originOfMass = rigidBodies[ti.thread_id].originOfMass;
 
@@ -2506,7 +2518,7 @@ void ParticleSystem::update(float dt) {
 
         float random = linearRand(-0.9, 0.9);
         resetEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_enemyGridWeight, enemyGridDim);
-        fillEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, objects["enemy_1"], objects["enemy_6"], random, enemyGridDim, enemyGridCell, objects["ball_1"]);
+        fillEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"]);
         
         updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth, objects["cannon"]);
 
@@ -2552,7 +2564,7 @@ void ParticleSystem::update(float dt) {
         updateRigidBodies();
         controlRigidBody(0, control_forward, control_rotate, dt);
         resetEnemyParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_constraintListCloth, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim);
-        moveEnemies<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, objects["enemy_1"], objects["enemy_6"], random, enemyGridDim, enemyGridCell, objects["ball_1"]);
+        moveEnemies<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"]);
         moveCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, objects["player"], objects["cannon"]);
         resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
         CUDA_SYNC_CHECK_ERROR();
