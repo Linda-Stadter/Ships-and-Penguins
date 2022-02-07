@@ -60,6 +60,9 @@ ParticleSystem::~ParticleSystem()
     checkError(cudaFree(d_particle_list));
 	checkError(cudaFree(d_cell_list));
 
+    checkError(cudaFree(d_shipInfos));
+    checkError(cudaFree(d_shipInfosCounter));
+
     checkError(cudaFree(d_enemyGridWeight));
     checkError(cudaFree(d_enemyGridId));
 
