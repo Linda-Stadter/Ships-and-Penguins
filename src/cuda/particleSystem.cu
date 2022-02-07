@@ -1059,9 +1059,10 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         rbID = -4; // trochoidal particles
     }
 
-    // reset cloth constraints
-    clothConstraints = std::vector<ClothConstraint>(0);
-    clothBendingConstraints = std::vector<ClothBendingConstraint>(0);
+    // reset cloth constraints and ship info
+    clothConstraints.clear();
+    clothBendingConstraints.clear();
+    shipInfos.clear();
 
     if (scenario == 13) {
         // scene parameters
