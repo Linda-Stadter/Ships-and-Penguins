@@ -111,9 +111,10 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     float cloth_break_distance = 2.0;
 
+    // friction
     float mu_k = 0.1;
     float mu_s = 0.8;
-    float mu_f = 0.0;
+    float mu_f = 0.8;
 
     float h = 1.0;
     float epsilon_spiky = 1e-5;

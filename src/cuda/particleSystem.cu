@@ -928,6 +928,27 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     objParticleCount = loadBox(rigidBodyCount, particleCountRB, dim, pos + spawnPos, rot, color, false, 0.1, clothDistance, fixtureThickness, true);
     particleCountRB += dim.x() * dim.y() * dim.z();
 
+    rigidBodyCount++;
+
+    int particlePenguinStart = particleCountRB;
+
+
+    // penguin
+    pos = {0.8, 0.7, 2.5};
+    std::unordered_map<std::string, float> penguin_paramters{{"scaling", 0.1}, {"mass", 0.002}, {"particleCount", 12}};
+    Saiga::UnifiedModel penguinModel("objs/penguin.obj");
+    vec4 penguin_color = {0.3, 0.3, 0.3, 0.55};
+
+    objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos + spawnPos, rot, penguin_color, penguinModel, penguin_paramters["scaling"], penguin_paramters["mass"], penguin_paramters["particleCount"], false);
+    particleCountRB += objParticleCount;
+
+    clothConstraints.push_back({335, 44, 0, 0});
+    clothConstraints.push_back({334, 43, 0, 0});
+    clothConstraints.push_back({335, 45, 0, 0});
+
+
+
+    int particleClothStart = particleCountRB;
 
     // ship cloth
     int rbID = -3;
@@ -945,7 +966,6 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     //std::vector<ClothBendingConstraint> clothBendingConstraints(0);
 
     int constraintsStart = clothConstraints.size();
-
     int initActiveState = 150; // 150 frames ~ 5sec * 30 fps
 
     // lower fixture
@@ -1007,16 +1027,13 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     }
 
     shipInfos.push_back({0,
-        rigidBodyCount,
-        particleCountRB,
-        particleCountRB + clothParticleCount,
+        rigidBodyCount - 2,
+        particleClothStart,
+        particleClothStart + clothParticleCount,
         constraintsStart,
         (int)clothConstraints.size(),
-        0}
+        rigidBodyCount - 1}
     );
-    
-
-    rigidBodyCount++;
 
     particleCountRB += clothParticleCount;
 }
@@ -1608,7 +1625,7 @@ __global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstr
     int active = constraints[ti.thread_id].active;
 
     // ignore broken constraints
-    if (active == 0) {
+    if (active == -1) {
         return;
     }
 
@@ -1644,7 +1661,7 @@ __global__ void solverPBDCloth(Saiga::ArrayView<Particle> particles, ClothConstr
         constraints[ti.thread_id].active--;
     // break constraint
     if (active == 1 && breakDistance > 0 && abs(d) > constraintDistance * breakDistance) {
-        constraints[ti.thread_id].active = 0;
+        constraints[ti.thread_id].active = -1;
     }
 
     // jacobi integration
@@ -2230,7 +2247,8 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
 
         int shipRbId = -1;
         bool cloth = false;
-        bool particle = false;
+        bool ship = false;
+        bool penguin = false;
         bool constraint = false;
 
         if (p.rbID == -3) {
@@ -2240,7 +2258,10 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
             }
         } else if (p.rbID == shipInfo.rbID) {
             shipRbId = shipInfo.rbID;
-            particle = true;
+            ship = true;
+        } else if (p.rbID == shipInfo.penguinID) {
+            shipRbId = shipInfo.rbID;
+            penguin = true;
         }
         if (ti.thread_id >= shipInfo.constraintsStart && ti.thread_id < shipInfo.constraintsEnd) {
             shipRbId = shipInfo.rbID;
@@ -2275,8 +2296,14 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
                 p.predicted = p.position;
                 p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
-            } else if (particle) {
+            } else if (ship) {
                 p.position = rigidBodies[shipInfo.rbID].A * p.relative + originOfMass;
+                p.predicted = p.position;
+                p.d_predicted = {0, 0, 0};
+                p.velocity = {0, 0, 0};
+            } else if (penguin) {
+                vec3 pos = {0.8, 0.7, 2.5};
+                p.position = rigidBodies[shipInfo.penguinID].A * p.relative + originOfMass + pos;
                 p.predicted = p.position;
                 p.d_predicted = {0, 0, 0};
                 p.velocity = {0, 0, 0};
