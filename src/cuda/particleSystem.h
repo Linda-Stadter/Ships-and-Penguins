@@ -161,9 +161,9 @@ class SAIGA_ALIGN(16) ParticleSystem
     bool debug_shooting = false;
 
     // cannon parameters
-    float cannonball_speed = 25;
-    float cannon_timer = 100;
-    float cannon_timer_reset = 100;
+    float cannonball_speed = 20;
+    float cannon_timer = 120;
+    float cannon_timer_reset = 120;
 
     int score = 0;
 

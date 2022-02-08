@@ -740,6 +740,16 @@ __global__ void resolveRigidBodyConstraints(Saiga::ArrayView<Particle> particles
     }
 }
 
+__global__ void updateRigidBodySpeed(RigidBody *rigidBodies, int maxRigidBodyCount, float dt = 0) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id >= maxRigidBodyCount)
+        return;
+    RigidBody &rb = rigidBodies[ti.thread_id];
+    // reset
+    rb.speed = (rb.lastOriginOfMass - rb.originOfMass).norm() / dt;
+    rb.lastOriginOfMass = rb.originOfMass;
+}
+
 __global__ void resetRigidBody(RigidBody *rigidBodies, int maxRigidBodyCount) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= maxRigidBodyCount)
@@ -758,6 +768,8 @@ __global__ void resetRigidBodyComplete(RigidBody *rigidBodies, int maxRigidBodyC
     // reset
     rb.particleCount = 0;
     rb.originOfMass = {0,0,0};
+    rb.lastOriginOfMass = {0,0,0};
+    rb.speed = 0;
     rb.A = mat3::Zero().cast<float>();
 }
 
@@ -1306,27 +1318,27 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         particleCountRB += objParticleCount;
 
         // spawns enemies
-        pos ={2, 4, 2};
+        pos ={2, 3, 2};
         objects["enemy_1"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={-15, 4, -25};
+        pos ={-15, 3, -25};
         objects["enemy_2"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={17, 4, 10};
+        pos ={17, 3, 10};
         objects["enemy_3"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={15, 4, -10};
+        pos ={15, 3, -10};
         objects["enemy_4"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={5, 4, -11};
+        pos ={5, 3, -11};
         objects["enemy_5"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={-15, 4, -8};
+        pos ={-15, 3, -8};
         objects["enemy_6"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
@@ -2425,24 +2437,27 @@ __device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, Rigid
     rigidBodies[rbID].A = rotMat;
 
     vec3 direction3d = rigidBodies[rbID].A * vec3{0, 0, 1};
-    vec3 direction2d ={direction3d.x(), -0.01, direction3d.z()};
+    vec3 direction2d ={direction3d.x(), 0, direction3d.z()};
     direction2d.normalize();
-    float speed = 0.003;
+    // max speed
+    float maxSpeed = 2.5;
+    vec3 currentDirection = rigidBodies[rbID].originOfMass - rigidBodies[rbID].lastOriginOfMass;
+    currentDirection[1] = 0;
+    currentDirection.normalize();
+    float dot = abs(currentDirection.dot(direction2d));
+    if (dot * rigidBodies[rbID].speed < maxSpeed)
+        rigidBodies[rbID].originOfMass += dot * direction2d * forward * 0.003;
 
     // fix ships in trochoidal area
     vec3 originOfMass = rigidBodies[rbID].originOfMass;
     if (originOfMass[0] <= -fluidDim[0]/2 || originOfMass[0] >= fluidDim[0]/2 || originOfMass[2] <= -fluidDim[2]/2 || originOfMass[2] >= fluidDim[2]/2) {
-        // slow down velocity
-        rigidBodies[rbID].originOfMass += direction2d * forward * speed * 0.4;
-        if (originOfMass[1] < 2.7)
-            rigidBodies[rbID].originOfMass[1] += 0.003;
-        if (originOfMass[1] < 2)
-            rigidBodies[rbID].originOfMass[1] = 2;
-        return;
+        if (originOfMass[1] < 2.2)
+            rigidBodies[rbID].originOfMass[1] += 0.005;
+        if (originOfMass[1] < 2.0)
+            rigidBodies[rbID].originOfMass[1] += 0.01;
+        if (originOfMass[1] < 1.8)
+            rigidBodies[rbID].originOfMass[1] = 1.8;
     }
-
-    // for ships inside fluid area
-    rigidBodies[rbID].originOfMass += direction2d * forward * speed;
 }
 
 
@@ -2453,7 +2468,7 @@ __device__ int computeTurn(vec3 oldDirection, vec3 newDirection) {
     float dotProduct = oldDirection[0] * newDirection[0] + oldDirection[2] * newDirection[2];
     float angle = acosf(dotProduct);
 
-    // don not change direction if angle is too small
+    // do not change direction if angle is too small
     if (angle < 0.10) {
         // 0.1 around 6 degree
         return 0;
@@ -2549,7 +2564,6 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
                 }
 
                 if (d_enemyGridWeight[y * enemyGridDim + x] > 0) { 
-                    //vec3 mid_position = vec3(mid_position_x, originOfMass[1], mid_position_z);
                     int enemyId = d_enemyGridId[y * enemyGridDim + x];
                     vec3 enemy_position = rigidBodies[enemyId].originOfMass;
                     vec3 away = originOfMass - enemy_position;
@@ -2563,8 +2577,8 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
         flee.normalize();
 
         int turn = computeTurn(oldDirection, flee);
-        float speed = 0.3;
-        moveRigidBodyEnemies(particles, rigidBodies, mapDim, fluidDim, ti.thread_id, speed, turn, 0.01);
+        float acceleration = 0.8;
+        moveRigidBodyEnemies(particles, rigidBodies, mapDim, fluidDim, ti.thread_id, acceleration, turn, 0.005);
         // also stabilize penguin
         moveRigidBodyEnemies(particles, rigidBodies, mapDim, fluidDim, penguinID, 0, 0, 0.05); // TODO extra function for stabilize only?
     }
@@ -2684,6 +2698,7 @@ void ParticleSystem::update(float dt) {
         moveEnemies<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"]);
         moveCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, objects["player"], objects["cannon"]);
         resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
+        updateRigidBodySpeed<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, maxRigidBodyCount, dt);
         CUDA_SYNC_CHECK_ERROR();
 
         updateTrochoidalParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, wave_number, phase_speed, steepness, dt * steps, fluidDim);
@@ -2722,11 +2737,19 @@ __global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particle
     vec3 direction3d = rigidBodies[rbID].A * vec3{0, 0, 1};
     vec3 direction2d = {direction3d.x(), 0, direction3d.z()};
     direction2d.normalize();
-    rigidBodies[rbID].originOfMass += direction2d * forward * 0.003;
+    // max speed
+    float maxSpeed = 3.5;
+    vec3 currentDirection = rigidBodies[rbID].originOfMass - rigidBodies[rbID].lastOriginOfMass;
+    currentDirection[1] = 0;
+    currentDirection.normalize();
+    float dot = abs(currentDirection.dot(direction2d));
+    if (dot * rigidBodies[rbID].speed < maxSpeed)
+        rigidBodies[rbID].originOfMass += dot * direction2d * forward * 0.003;
 }
 
 void ParticleSystem::controlRigidBody(int rbID, float forward, float rotate, float dt){
-    moveRigidBody<<<1, 32>>>(d_particles, particleCountRB, d_rigidBodies, rbID, forward, rotate);
+    float palyer_acceleration = 1.2;
+    moveRigidBody<<<1, 32>>>(d_particles, particleCountRB, d_rigidBodies, rbID, forward * palyer_acceleration, rotate);
     cudaMemcpy(&ship_position, &d_rigidBodies[0].originOfMass, sizeof(vec3) * 1, cudaMemcpyDeviceToHost);
 }
 
@@ -2790,7 +2813,7 @@ __global__ void rayInfo(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, th
         return;
     if (ti.thread_id == 0) {
         Particle &particle = particles[list[min].first];
-        printf("Particle Info:\n");
+        printf("\nParticle Info:\n");
         printf("idx: %i; id: %i; rbID: %i, position: %f, radius: %f, mass: %f, rgb: %f, %f, %f;\n", list[min].first, particle.id, particle.rbID, particle.predicted, particle.radius, 1.0f/particle.massinv, particle.color[0], particle.color[1], particle.color[2]);
         int shipIdx = -1;
         bool penguin = false;
@@ -2800,6 +2823,10 @@ __global__ void rayInfo(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, th
                 shipIdx = idx;
                 break;
             }
+        }
+        if (particle.rbID >= 0) {
+            vec3 pos = d_rigidBodies[particle.rbID].originOfMass;
+            printf("rbID: %i; position: %f, %f, %f; speed: %f\n", particle.rbID, pos[0], pos[1], pos[2], d_rigidBodies[particle.rbID].speed);
         }
         if (shipIdx > -1) {
             ShipInfo &shipInfo = d_shipInfos[shipIdx];
