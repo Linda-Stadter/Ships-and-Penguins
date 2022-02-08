@@ -30,13 +30,13 @@ void ParticleSystem::setDevicePtr(void* particleVbo) {
     d_particles = ArrayView<Particle>((Particle*) particleVbo, particleCount);
 }
 
-__global__ void updateParticlesPBD1_radius(float dt, vec3 gravity, Saiga::ArrayView<Particle>particles, float damp_v, float particleRadiusWater, float particleRadiusCloth, int exception) {
+__global__ void updateParticlesPBD1_radius(float dt, vec3 gravity, Saiga::ArrayView<Particle>particles, float damp_v, float particleRadiusWater, float particleRadiusCloth, int cannonId, int playerPenguinId) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particles.size())
         return;
     Particle &p = particles[ti.thread_id];
 
-    if (p.fixed || p.rbID == exception)
+    if (p.fixed || p.rbID == cannonId || p.rbID == playerPenguinId)
         return;
 
     /*
@@ -700,12 +700,12 @@ __global__ void caclulateRigidBodyOriginOfMass(Saiga::ArrayView<Particle> partic
     }
 }
 
-__global__ void covariance(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies, int exception) {
+__global__ void covariance(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies, int cannonId, int playerPenguinId) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particleCountRB)
         return;
     Particle &p = particles[ti.thread_id];
-    if (p.rbID >= 0 && p.rbID != exception) {
+    if (p.rbID >= 0 && p.rbID != cannonId && p.rbID != playerPenguinId) {
         //vec3 pc = p.position - rigidBodies[p.rbID].originOfMass;
         mat3 pcr = (p.predicted - rigidBodies[p.rbID].originOfMass) * p.relative.transpose();
 
@@ -729,14 +729,19 @@ __global__ void SVD(RigidBody *rigidBodies, int rigidBodyCount) {
     rb.A = svd3_cuda::pd(rb.A);
 }
 
-__global__ void resolveRigidBodyConstraints(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies) {
+__global__ void resolveRigidBodyConstraints(Saiga::ArrayView<Particle> particles, int particleCountRB, RigidBody *rigidBodies, int playerPenguinId) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= particleCountRB)
         return;
     Particle &p = particles[ti.thread_id];
     if (p.rbID >= 0) {
         // dx = (Q*r + c) - p
-        p.predicted += (rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass) - p.predicted;
+        if (p.rbID == playerPenguinId) {
+            p.predicted += (rigidBodies[0].A * p.relative + rigidBodies[p.rbID].originOfMass) - p.predicted;
+        }
+        else {
+            p.predicted += (rigidBodies[p.rbID].A * p.relative + rigidBodies[p.rbID].originOfMass) - p.predicted;
+        }
     }
 }
 
@@ -784,7 +789,7 @@ __global__ void initRigidBodiesRotation(RigidBody *rigidBodies, int rigidBodyCou
 void ParticleSystem::constraintsShapeMatchingRB() {
     updateRigidBodies();
 
-    resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
+    resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies, objects["player_penguin"]);
     CUDA_SYNC_CHECK_ERROR();    
 }
 
@@ -796,7 +801,7 @@ void ParticleSystem::updateRigidBodies() {
 
     caclulateRigidBodyOriginOfMass<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
     CUDA_SYNC_CHECK_ERROR();
-    covariance<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies, objects["cannon"]);
+    covariance<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies, objects["cannon"], objects["player_penguin"]);
     CUDA_SYNC_CHECK_ERROR();
     SVD<<<BLOCKS_RB, BLOCK_SIZE>>>(d_rigidBodies, rigidBodyCount);
     CUDA_SYNC_CHECK_ERROR();
@@ -1000,7 +1005,8 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     pos = {0.8, 0.7, 2.5};
     std::unordered_map<std::string, float> penguin_paramters{{"scaling", 0.1}, {"mass", 0.002}, {"particleCount", 12}};
     Saiga::UnifiedModel penguinModel("objs/penguin.obj");
-    vec4 penguin_color = {0.3, 0.3, 0.3, 0.55};
+    vec4 penguin_color = {0.11, 0.10, 0.07, 1};
+
 
     objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos + spawnPos, rot, penguin_color, penguinModel, penguin_paramters["scaling"], penguin_paramters["mass"], penguin_paramters["particleCount"], false);
     particleCountRB += objParticleCount;
@@ -1103,6 +1109,441 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     particleCountRB += clothParticleCount;
 }
 
+__global__ void colorObjects(Saiga::ArrayView<Particle> d_particles, RigidBody *rigidBodies, ShipInfo* d_shipInfos, int* d_shipInfosCounter, int ball_1, int fishStart, int cannonStart, int playerPenguinStart) {
+    Saiga::CUDA::ThreadInfo<> ti;
+
+    vec4 white = vec4(0.95, 0.93, 0.93, 1);
+    vec4 orange = vec4(0.93, 0.67, 0.27, 1);
+    vec4 black ={0.11, 0.10, 0.07, 1};
+    vec4 wood ={0.36, 0.23, 0.10, 1};
+    vec4 brown = vec4(0.54, 0.45, 0.33, 1);
+    vec4 light_brown = vec4(0.60, 0.51, 0.39, 1);
+
+    // color penguin
+    for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx++) {
+        ShipInfo &shipInfo = d_shipInfos[shipIdx];
+        if (ti.thread_id == shipInfo.rbID) {
+            // nose
+            d_particles[shipInfo.penguinStart + 123].color = orange;
+
+            // feet
+            d_particles[shipInfo.penguinStart + 45].color = orange;
+            d_particles[shipInfo.penguinStart + 135].color = orange;
+
+            // belly
+            d_particles[shipInfo.penguinStart + 67].color = white;
+            d_particles[shipInfo.penguinStart + 112].color = white;
+            d_particles[shipInfo.penguinStart + 158].color = white;
+            d_particles[shipInfo.penguinStart + 29].color = white;
+            d_particles[shipInfo.penguinStart + 109].color = white;
+            d_particles[shipInfo.penguinStart + 192].color = white;
+            d_particles[shipInfo.penguinStart + 60].color = white;
+            d_particles[shipInfo.penguinStart + 105].color = white;
+            d_particles[shipInfo.penguinStart + 151].color = white;
+            d_particles[shipInfo.penguinStart + 64].color = white;
+            d_particles[shipInfo.penguinStart + 188].color = white;
+            d_particles[shipInfo.penguinStart + 184].color = white;
+            d_particles[shipInfo.penguinStart + 146].color = white;
+            d_particles[shipInfo.penguinStart + 99].color = white;
+            d_particles[shipInfo.penguinStart + 55].color = white;
+            d_particles[shipInfo.penguinStart + 21].color = white;
+            d_particles[shipInfo.penguinStart + 17].color = white;
+            d_particles[shipInfo.penguinStart + 50].color = white;
+            d_particles[shipInfo.penguinStart + 93].color = white;
+            d_particles[shipInfo.penguinStart + 140].color = white;
+            d_particles[shipInfo.penguinStart + 180].color = white;
+            d_particles[shipInfo.penguinStart + 155].color = white;
+            d_particles[shipInfo.penguinStart + 25].color = white;
+            
+            break;
+        }
+    }
+
+    if (ti.thread_id == 0) {
+        // color player penguin
+        // nose
+        d_particles[playerPenguinStart + 123].color = orange;
+
+        // feet
+        d_particles[playerPenguinStart + 45].color = orange;
+        d_particles[playerPenguinStart + 135].color = orange;
+
+        // belly
+        d_particles[playerPenguinStart + 67].color = white;
+        d_particles[playerPenguinStart + 112].color = white;
+        d_particles[playerPenguinStart + 158].color = white;
+        d_particles[playerPenguinStart + 29].color = white;
+        d_particles[playerPenguinStart + 109].color = white;
+        d_particles[playerPenguinStart + 192].color = white;
+        d_particles[playerPenguinStart + 60].color = white;
+        d_particles[playerPenguinStart + 105].color = white;
+        d_particles[playerPenguinStart + 151].color = white;
+        d_particles[playerPenguinStart + 64].color = white;
+        d_particles[playerPenguinStart + 188].color = white;
+        d_particles[playerPenguinStart + 184].color = white;
+        d_particles[playerPenguinStart + 146].color = white;
+        d_particles[playerPenguinStart + 99].color = white;
+        d_particles[playerPenguinStart + 55].color = white;
+        d_particles[playerPenguinStart + 21].color = white;
+        d_particles[playerPenguinStart + 17].color = white;
+        d_particles[playerPenguinStart + 50].color = white;
+        d_particles[playerPenguinStart + 93].color = white;
+        d_particles[playerPenguinStart + 140].color = white;
+        d_particles[playerPenguinStart + 180].color = white;
+        d_particles[playerPenguinStart + 155].color = white;
+        d_particles[playerPenguinStart + 25].color = white;
+
+
+
+        // fish head
+        d_particles[fishStart + 269].color = brown;
+        d_particles[fishStart + 173].color = brown;
+        d_particles[fishStart + 174].color = brown;
+        d_particles[fishStart + 175].color = brown;
+        d_particles[fishStart + 176].color = brown;
+        d_particles[fishStart + 273].color = brown;
+        d_particles[fishStart + 374].color = brown;
+        d_particles[fishStart + 373].color = brown;
+        d_particles[fishStart + 466].color = brown;
+        d_particles[fishStart + 465].color = brown;
+        d_particles[fishStart + 372].color = brown;
+        d_particles[fishStart + 272].color = brown;
+        d_particles[fishStart + 271].color = brown;
+        d_particles[fishStart + 371].color = brown;
+        d_particles[fishStart + 464].color = brown;
+        d_particles[fishStart + 463].color = brown;
+        d_particles[fishStart + 370].color = brown;
+        d_particles[fishStart + 270].color = brown;
+        d_particles[fishStart + 369].color = brown;
+        d_particles[fishStart + 269].color = brown;
+
+        d_particles[fishStart + 257].color = light_brown;
+        d_particles[fishStart + 356].color = light_brown;
+        d_particles[fishStart + 453].color = light_brown;
+        d_particles[fishStart + 454].color = light_brown;
+        d_particles[fishStart + 523].color = light_brown;
+        d_particles[fishStart + 524].color = light_brown;
+        d_particles[fishStart + 525].color = light_brown;
+        d_particles[fishStart + 526].color = light_brown;
+        d_particles[fishStart + 527].color = light_brown;
+        d_particles[fishStart + 528].color = light_brown;
+        d_particles[fishStart + 562].color = light_brown;
+        d_particles[fishStart + 165].color = light_brown;
+        d_particles[fishStart + 94].color = light_brown;
+        d_particles[fishStart + 95].color = light_brown;
+        d_particles[fishStart + 96].color = light_brown;
+        d_particles[fishStart + 97].color = light_brown;
+        d_particles[fishStart + 170].color = light_brown;
+        d_particles[fishStart + 263].color = light_brown;
+        d_particles[fishStart + 264].color = light_brown;
+        d_particles[fishStart + 97].color = light_brown;
+        d_particles[fishStart + 363].color = light_brown;
+        d_particles[fishStart + 459].color = light_brown;
+        d_particles[fishStart + 514].color = light_brown;
+        d_particles[fishStart + 88].color = light_brown;
+        d_particles[fishStart + 154].color = light_brown;
+
+        // fish eyes
+        // left
+        d_particles[fishStart + 427].color = white;
+        d_particles[fishStart + 414].color = black;
+        d_particles[fishStart + 401].color = white;
+
+        //right
+        d_particles[fishStart + 142].color = white;
+        d_particles[fishStart + 130].color = black;
+        d_particles[fishStart + 119].color = white;
+
+        // mouth
+        d_particles[fishStart + 301].color = brown;
+        d_particles[fishStart + 202].color = brown;
+
+        // left cannon
+        d_particles[cannonStart + 1051].color = wood;
+        d_particles[cannonStart + 1049].color = wood;
+        d_particles[cannonStart + 1046].color = wood;
+        d_particles[cannonStart + 1043].color = wood;
+        d_particles[cannonStart + 1106].color = wood;
+        d_particles[cannonStart + 1049].color = wood;
+        d_particles[cannonStart + 1124].color = wood;
+        d_particles[cannonStart + 1122].color = wood;
+        d_particles[cannonStart + 1124].color = wood;
+        d_particles[cannonStart + 1118].color = wood;
+        d_particles[cannonStart + 1079].color = wood;
+        d_particles[cannonStart + 1089].color = wood;
+        d_particles[cannonStart + 1090].color = wood;
+        d_particles[cannonStart + 1080].color = wood;
+        d_particles[cannonStart + 1103].color = wood;
+        d_particles[cannonStart + 1097].color = wood;
+        d_particles[cannonStart + 1052].color = wood;
+        d_particles[cannonStart + 1050].color = wood;
+        d_particles[cannonStart + 1049].color = wood;
+        d_particles[cannonStart + 1049].color = wood;
+        d_particles[cannonStart + 1047].color = wood;
+        d_particles[cannonStart + 1088].color = wood;
+        d_particles[cannonStart + 1045].color = wood;
+        d_particles[cannonStart + 1086].color = wood;
+        d_particles[cannonStart + 1043].color = wood;
+        d_particles[cannonStart + 1085].color = wood;
+        d_particles[cannonStart + 1086].color = wood;
+        d_particles[cannonStart + 1087].color = wood;
+        d_particles[cannonStart + 1088].color = wood;
+        d_particles[cannonStart + 1089].color = wood;
+        d_particles[cannonStart + 1113].color = wood;
+        d_particles[cannonStart + 1109].color = wood;
+        d_particles[cannonStart + 1111].color = wood;
+        d_particles[cannonStart + 1109].color = wood;
+        d_particles[cannonStart + 1110].color = wood;
+        d_particles[cannonStart + 1112].color = wood;
+        d_particles[cannonStart + 1113].color = wood;
+        d_particles[cannonStart + 1103].color = wood;
+        d_particles[cannonStart + 1104].color = wood;
+        d_particles[cannonStart + 1121].color = wood;
+        d_particles[cannonStart + 1105].color = wood;
+        d_particles[cannonStart + 1112].color = wood;
+        d_particles[cannonStart + 1107].color = wood;
+        d_particles[cannonStart + 1108].color = wood;
+        d_particles[cannonStart + 1127].color = wood;
+        d_particles[cannonStart + 1126].color = wood;
+        d_particles[cannonStart + 1126].color = wood;
+        d_particles[cannonStart + 1125].color = wood;
+        d_particles[cannonStart + 1129].color = wood;
+        d_particles[cannonStart + 1122].color = wood;
+        d_particles[cannonStart + 1121].color = wood;
+        d_particles[cannonStart + 1114].color = wood;
+        d_particles[cannonStart + 1115].color = wood;
+        d_particles[cannonStart + 1116].color = wood;
+        d_particles[cannonStart + 1119].color = wood;
+        d_particles[cannonStart + 1120].color = wood;
+        d_particles[cannonStart + 1096].color = wood;
+        d_particles[cannonStart + 1102].color = wood;
+        d_particles[cannonStart + 1108].color = wood;
+        d_particles[cannonStart + 1089].color = wood;
+        d_particles[cannonStart + 1041].color = wood;
+        d_particles[cannonStart + 1114].color = wood;
+        d_particles[cannonStart + 1121].color = wood;
+        d_particles[cannonStart + 1109].color = wood;
+        d_particles[cannonStart + 1109].color = wood;
+        d_particles[cannonStart + 1085].color = wood;
+        d_particles[cannonStart + 1123].color = wood;
+        d_particles[cannonStart + 1049].color = wood;
+        d_particles[cannonStart + 1044].color = wood;
+        d_particles[cannonStart + 1074].color = wood;
+        d_particles[cannonStart + 1091].color = wood;
+        d_particles[cannonStart + 1037].color = wood;
+        d_particles[cannonStart + 1095].color = wood;
+        d_particles[cannonStart + 1094].color = wood;
+        d_particles[cannonStart + 1101].color = wood;
+        d_particles[cannonStart + 1095].color = wood;
+        d_particles[cannonStart + 1094].color = wood;
+        d_particles[cannonStart + 1100].color = wood;
+        d_particles[cannonStart + 1101].color = wood;
+        d_particles[cannonStart + 1078].color = wood;
+        d_particles[cannonStart + 1078].color = wood;
+        d_particles[cannonStart + 1076].color = wood;
+        d_particles[cannonStart + 1075].color = wood;
+        d_particles[cannonStart + 1081].color = wood;
+        d_particles[cannonStart + 1082].color = wood;
+        d_particles[cannonStart + 1077].color = wood;
+        d_particles[cannonStart + 1078].color = wood;
+        d_particles[cannonStart + 1084].color = wood;
+        d_particles[cannonStart + 1091].color = wood;
+        d_particles[cannonStart + 1092].color = wood;
+
+
+        // right cannon
+        d_particles[cannonStart + 43].color = wood;
+        d_particles[cannonStart + 55].color = wood;
+        d_particles[cannonStart + 37].color = wood;
+        d_particles[cannonStart + 23].color = wood;
+        d_particles[cannonStart + 72].color = wood;
+        d_particles[cannonStart + 73].color = wood;
+        d_particles[cannonStart + 74].color = wood;
+        d_particles[cannonStart + 75].color = wood;
+        d_particles[cannonStart + 75].color = wood;
+        d_particles[cannonStart + 74].color = wood;
+        d_particles[cannonStart + 73].color = wood;
+        d_particles[cannonStart + 72].color = wood;
+        d_particles[cannonStart + 66].color = wood;
+        d_particles[cannonStart + 48].color = wood;
+        d_particles[cannonStart + 49].color = wood;
+        d_particles[cannonStart + 50].color = wood;
+        d_particles[cannonStart + 51].color = wood;
+        d_particles[cannonStart + 52].color = wood;
+        d_particles[cannonStart + 47].color = wood;
+        d_particles[cannonStart + 51].color = wood;
+        d_particles[cannonStart + 50].color = wood;
+        d_particles[cannonStart + 49].color = wood;
+        d_particles[cannonStart + 48].color = wood;
+        d_particles[cannonStart + 29].color = wood;
+        d_particles[cannonStart + 30].color = wood;
+        d_particles[cannonStart + 31].color = wood;
+        d_particles[cannonStart + 32].color = wood;
+        d_particles[cannonStart + 33].color = wood;
+        d_particles[cannonStart + 34].color = wood;
+        d_particles[cannonStart + 15].color = wood;
+        d_particles[cannonStart + 13].color = wood;
+        d_particles[cannonStart + 13].color = wood;
+        d_particles[cannonStart + 6].color = wood;
+        d_particles[cannonStart + 7].color = wood;
+        d_particles[cannonStart + 8].color = wood;
+        d_particles[cannonStart + 11].color = wood;
+        d_particles[cannonStart + 10].color = wood;
+        d_particles[cannonStart + 3].color = wood;
+        d_particles[cannonStart + 2].color = wood;
+        d_particles[cannonStart + 9].color = wood;
+        d_particles[cannonStart + 6].color = wood;
+        d_particles[cannonStart + 55].color = wood;
+        d_particles[cannonStart + 22].color = wood;
+        d_particles[cannonStart + 21].color = wood;
+        d_particles[cannonStart + 26].color = wood;
+        d_particles[cannonStart + 27].color = wood;
+        d_particles[cannonStart + 41].color = wood;
+        d_particles[cannonStart + 40].color = wood;
+        d_particles[cannonStart + 58].color = wood;
+        d_particles[cannonStart + 58].color = wood;
+        d_particles[cannonStart + 58].color = wood;
+        d_particles[cannonStart + 72].color = wood;
+        d_particles[cannonStart + 67].color = wood;
+        d_particles[cannonStart + 68].color = wood;
+        d_particles[cannonStart + 69].color = wood;
+        d_particles[cannonStart + 75].color = wood;
+        d_particles[cannonStart + 70].color = wood;
+        d_particles[cannonStart + 51].color = wood;
+        d_particles[cannonStart + 50].color = wood;
+        d_particles[cannonStart + 49].color = wood;
+        d_particles[cannonStart + 48].color = wood;
+        d_particles[cannonStart + 14].color = wood;
+        d_particles[cannonStart + 12].color = wood;
+        d_particles[cannonStart + 4].color = wood;
+        d_particles[cannonStart + 16].color = wood;
+        d_particles[cannonStart + 22].color = wood;
+        d_particles[cannonStart + 28].color = wood;
+        d_particles[cannonStart + 42].color = wood;
+        d_particles[cannonStart + 59].color = wood;
+        d_particles[cannonStart + 70].color = wood;
+        d_particles[cannonStart + 16].color = wood;
+        d_particles[cannonStart + 46].color = wood;
+        d_particles[cannonStart + 45].color = wood;
+        d_particles[cannonStart + 44].color = wood;
+        d_particles[cannonStart + 43].color = wood;
+        d_particles[cannonStart + 64].color = wood;
+        d_particles[cannonStart + 17].color = wood;
+        d_particles[cannonStart + 18].color = wood;
+        d_particles[cannonStart + 19].color = wood;
+        d_particles[cannonStart + 20].color = wood;
+        d_particles[cannonStart + 48].color = wood;
+
+        
+        d_particles[cannonStart + 1131].color = black;
+        d_particles[cannonStart + 1129].color = black;
+        d_particles[cannonStart + 1131].color = black;
+        d_particles[cannonStart + 1130].color = black;
+        d_particles[cannonStart + 1128].color = black;
+        d_particles[cannonStart + 1036].color = black;
+        d_particles[cannonStart + 1035].color = black;
+        d_particles[cannonStart + 921].color = black;
+        d_particles[cannonStart + 922].color = black;
+        d_particles[cannonStart + 786].color = black;
+        d_particles[cannonStart + 785].color = black;
+        d_particles[cannonStart + 634].color = black;
+        d_particles[cannonStart + 635].color = black;
+        d_particles[cannonStart + 635].color = black;
+        d_particles[cannonStart + 476].color = black;
+        d_particles[cannonStart + 328].color = black;
+        d_particles[cannonStart + 329].color = black;
+        d_particles[cannonStart + 634].color = black;
+        d_particles[cannonStart + 92].color = black;
+        d_particles[cannonStart + 93].color = black;
+        d_particles[cannonStart + 54].color = black;
+        d_particles[cannonStart + 55].color = wood;
+        d_particles[cannonStart + 53].color = black;
+        d_particles[cannonStart + 1].color = black;
+        d_particles[cannonStart + 0].color = black;
+        d_particles[cannonStart + 5].color = black;
+        d_particles[cannonStart + 1093].color = black;
+        d_particles[cannonStart + 477].color = black;
+        d_particles[cannonStart + 200].color = black;
+        d_particles[cannonStart + 199].color = black;
+        d_particles[cannonStart + 199].color = black;
+        d_particles[cannonStart + 35].color = black;
+        d_particles[cannonStart + 1072].color = black;
+        d_particles[cannonStart + 1073].color = black;
+
+        // first ring
+        d_particles[cannonStart + 78].color = wood;
+        d_particles[cannonStart + 77].color = wood;
+        d_particles[cannonStart + 81].color = wood;
+        d_particles[cannonStart + 80].color = wood;
+        d_particles[cannonStart + 85].color = wood;
+        d_particles[cannonStart + 84].color = wood;
+        d_particles[cannonStart + 88].color = wood;
+        d_particles[cannonStart + 194].color = wood;
+        d_particles[cannonStart + 194].color = wood;
+        d_particles[cannonStart + 318].color = wood;
+        d_particles[cannonStart + 317].color = wood;
+        d_particles[cannonStart + 469].color = wood;
+        d_particles[cannonStart + 468].color = wood;
+        d_particles[cannonStart + 625].color = wood;
+        d_particles[cannonStart + 626].color = wood;
+        d_particles[cannonStart + 778].color = wood;
+        d_particles[cannonStart + 777].color = wood;
+        d_particles[cannonStart + 915].color = wood;
+        d_particles[cannonStart + 908].color = wood;
+        d_particles[cannonStart + 1028].color = wood;
+        d_particles[cannonStart + 1029].color = wood;
+        d_particles[cannonStart + 1068].color = wood;
+        d_particles[cannonStart + 1065].color = wood;
+        d_particles[cannonStart + 1062].color = wood;
+        d_particles[cannonStart + 1057].color = wood;
+        d_particles[cannonStart + 1058].color = wood;
+        d_particles[cannonStart + 1055].color = wood;
+        d_particles[cannonStart + 1054].color = wood;
+        d_particles[cannonStart + 947].color = wood;
+        d_particles[cannonStart + 934].color = wood;
+        d_particles[cannonStart + 809].color = wood;
+        d_particles[cannonStart + 186].color = wood;
+        d_particles[cannonStart + 119].color = wood;
+        d_particles[cannonStart + 219].color = wood;
+        d_particles[cannonStart + 342].color = wood;
+        d_particles[cannonStart + 492].color = wood;
+        d_particles[cannonStart + 649].color = wood;
+
+        // second ring
+        d_particles[cannonStart + 1042].color = wood;
+        d_particles[cannonStart + 1053].color = wood;
+        d_particles[cannonStart + 1053].color = wood;
+        d_particles[cannonStart + 1056].color = wood;
+        d_particles[cannonStart + 1061].color = wood;
+        d_particles[cannonStart + 1060].color = wood;
+        d_particles[cannonStart + 1004].color = wood;
+        d_particles[cannonStart + 1005].color = wood;
+        d_particles[cannonStart + 898].color = wood;
+        d_particles[cannonStart + 758].color = wood;
+        d_particles[cannonStart + 604].color = wood;
+        d_particles[cannonStart + 449].color = wood;
+        d_particles[cannonStart + 307].color = wood;
+        d_particles[cannonStart + 172].color = wood;
+        d_particles[cannonStart + 173].color = wood;
+        d_particles[cannonStart + 82].color = wood;
+        d_particles[cannonStart + 82].color = wood;
+        d_particles[cannonStart + 79].color = wood;
+        d_particles[cannonStart + 76].color = wood;
+        d_particles[cannonStart + 71].color = wood;
+        d_particles[cannonStart + 65].color = wood;
+        d_particles[cannonStart + 83].color = wood;
+        d_particles[cannonStart + 1048].color = wood;
+        d_particles[cannonStart + 925].color = wood;
+        d_particles[cannonStart + 788].color = wood;
+        d_particles[cannonStart + 639].color = wood;
+        d_particles[cannonStart + 333].color = wood;
+        d_particles[cannonStart + 201].color = wood;
+        d_particles[cannonStart + 94].color = wood;
+        d_particles[cannonStart + 482].color = wood;
+
+    }
+}
+
 void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float randInitMul, int scenario, vec3 fluidDim, vec3 trochoidal1Dim, vec3 trochoidal2Dim, ivec2 layers) {
     int rbID = -1; // free particles
     vec4 color = {0.0f, 1.0f, 0.0f, 1.f};
@@ -1111,9 +1552,12 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     vec4 ship_color = {0.36, 0.23, 0.10, 1};
     Saiga::UnifiedModel shipModel("objs/ship.obj");
 
-    std::unordered_map<std::string, float> pengunin_paramters{{"scaling", 0.04}, {"mass", 0.002}, {"particleCount", 35}};
+    std::unordered_map<std::string, float> penguin_paramters{{"scaling", 0.1}, {"mass", 0.002}, {"particleCount", 12}};
     Saiga::UnifiedModel penguinModel("objs/penguin.obj");
-    vec4 penguin_color = {0.3, 0.3, 0.3, 0.55};
+    vec4 penguin_color ={0.11, 0.10, 0.07, 1};
+
+    int cannonStart;
+    int playerPenguinStart;
 
     if (scenario >= 7) {
         color = {0, 0, 0.8, 1};
@@ -1347,12 +1791,17 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         //objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, penguin_color, penguinModel, pengunin_paramters["scaling"], pengunin_paramters["mass"], pengunin_paramters["particleCount"], true);
         //printf("count %i", objParticleCount);
         //particleCountRB += objParticleCount;
-
+        cannonStart = particleCountRB;
         Saiga::UnifiedModel cannonModel("objs/cannon.obj");
-        pos ={0, 10.3, 0.};
-        vec4 cannon_color ={0.54, 0.79, 0.84, 1.0};
+        pos ={0, 30.3, 0.};
+        vec4 cannon_color ={0.68, 0.45, 0.24, 1.0};
         objects["cannon"] = rigidBodyCount;
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, cannon_color, cannonModel, 0.06, 0.001, 23, false);
+        particleCountRB += objParticleCount;
+
+        playerPenguinStart = particleCountRB;
+        objects["player_penguin"] = rigidBodyCount;
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos + spawnPos, rot, penguin_color, penguinModel, penguin_paramters["scaling"], penguin_paramters["mass"], penguin_paramters["particleCount"], false);
         particleCountRB += objParticleCount;
     }
 
@@ -1407,6 +1856,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     score = 0;
     passed_time = 0;
     printf("particle Count RB %i\n", particleCountRB);
+    colorObjects<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_shipInfos, d_shipInfosCounter, objects["ball_1"], particleFishStart, cannonStart, playerPenguinStart);
 }
 
 // 4.0
@@ -2481,6 +2931,17 @@ __device__ int computeTurn(vec3 oldDirection, vec3 newDirection) {
     return turn;
 }
 
+__global__ void movePlayerPenguin(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int shipId, int penguinId) {
+    Saiga::CUDA::ThreadInfo<> ti;
+    if (ti.thread_id > 0)
+        return;
+
+    vec3 originOfMassShip = rigidBodies[shipId].originOfMass;
+    vec3 penguinOffset = rigidBodies[shipId].A * vec3(0, 1.15, -0.7);
+    rigidBodies[penguinId].originOfMass = originOfMassShip + penguinOffset;
+
+  }
+
 __global__ void moveCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 cameraDirection, int shipId, int cannonId) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id > 0)
@@ -2515,6 +2976,7 @@ __global__ void moveCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigi
     // apply rotation on y axis first, then x axis
     rigidBodies[cannonId].A = Eigen::AngleAxisf(z_angle, Eigen::Vector3f::UnitY()) * Eigen::AngleAxisf(plane_angle, Eigen::Vector3f::UnitX()) * Eigen::AngleAxisf(0, Eigen::Vector3f::UnitZ());
 }
+
 
 __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim, float enemyGridCell, int ball) {
     Saiga::CUDA::ThreadInfo<> ti;
@@ -2658,7 +3120,7 @@ void ParticleSystem::update(float dt) {
         resetEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_enemyGridWeight, enemyGridDim);
         fillEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"]);
         
-        updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth, objects["cannon"]);
+        updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth, objects["cannon"], objects["player_penguin"]);
 
 
         calculateHash<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
@@ -2704,7 +3166,8 @@ void ParticleSystem::update(float dt) {
         resetEnemyParticles<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_constraintListCloth, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim);
         moveEnemies<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"]);
         moveCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, objects["player"], objects["cannon"]);
-        resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies);
+        movePlayerPenguin<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, objects["player"], objects["player_penguin"]);
+        resolveRigidBodyConstraints<<<BLOCKS, BLOCK_SIZE>>>(d_particles, particleCount, d_rigidBodies, objects["player_penguin"]);
         updateRigidBodySpeed<<<BLOCKS, BLOCK_SIZE>>>(d_rigidBodies, maxRigidBodyCount, dt);
         CUDA_SYNC_CHECK_ERROR();
 
@@ -2822,6 +3285,7 @@ __global__ void rayInfo(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, th
         Particle &particle = particles[list[min].first];
         printf("\nParticle Info:\n");
         printf("idx: %i; id: %i; rbID: %i, position: %f, radius: %f, mass: %f, rgb: %f, %f, %f;\n", list[min].first, particle.id, particle.rbID, particle.predicted, particle.radius, 1.0f/particle.massinv, particle.color[0], particle.color[1], particle.color[2]);
+        
         int shipIdx = -1;
         bool penguin = false;
         for (int idx = 0; idx < *d_shipInfosCounter; idx++) {
