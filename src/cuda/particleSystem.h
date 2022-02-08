@@ -63,6 +63,7 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     void constraintsShapeMatchingRB();
     void updateRigidBodies();
+    void computeScore();
 
     int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass, float maxParticleCount, bool stripes);
     int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass, float scaling, float particleRadius, bool noSDF);
@@ -135,6 +136,9 @@ class SAIGA_ALIGN(16) ParticleSystem
     float last_dt = 0;
 
     int *d_rayHitCount;
+    int *d_score;
+    int *d_particleHits;
+    int *d_rbHits;
 
     // wave paramenters
     float wave_number = 20.0;
@@ -149,11 +153,14 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     vec3 ship_position = {0, 0, 0};
     vec3 camera_direction ={1, 0, 0};
+    bool debug_shooting = false;
 
     // cannon parameters
     float cannonball_speed = 25;
     float cannon_timer = 100;
     float cannon_timer_reset = 100;
+
+    int score = 0;
 
     // map parameters
     vec3 mapDim ={0, 0, 0};

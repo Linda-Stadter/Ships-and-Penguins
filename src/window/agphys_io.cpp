@@ -110,6 +110,7 @@ void Agphys::keyPressed(int key, int scancode, int mods)
             window->close();
             break;
         case GLFW_KEY_R:
+            cudaFree(particleSystem->d_rbHits);
             resetParticles();
             break;
         case GLFW_KEY_K:

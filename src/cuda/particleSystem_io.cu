@@ -48,6 +48,8 @@ void ParticleSystem::renderGUI()
 
         ImGui::InputFloat("cannonball_speed", &cannonball_speed);
 
+        ImGui::Checkbox("debug_shooting", &debug_shooting);
+
         ImGui::InputFloat("wave_length", &wave_number);
         ImGui::InputFloat("phase_speed", &phase_speed);
         ImGui::InputFloat("steepness", &steepness);
@@ -84,6 +86,9 @@ void ParticleSystem::renderIngameGUI()
         if (reload_bar_progress == reload_bar_length)
             reload_color = ImColor(.5f, 1.f, .5f, 1.f);
         ImGui::TextColored(reload_color, reload.c_str());
+        std::string score_string= "Score: ";
+        score_string.append(std::to_string(score));
+        ImGui::TextColored(ImColor(1.f, 1.f, 1.f, 1.f), score_string.c_str());
     }
     ImGui::End();
 }
