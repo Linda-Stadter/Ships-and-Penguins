@@ -106,6 +106,9 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     ImGui::TimeGraph physicsGraph;
     void renderGUI();
 
+    void toggleGameMode();
+    bool gameMode = false;
+
     // Other stuff
     bool pause = false;
 #ifdef SAIGA_USE_FFMPEG
