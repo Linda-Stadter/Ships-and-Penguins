@@ -408,28 +408,46 @@ void VertexBuffer<Particle>::setVertexAttributes()
 
 void Agphys::updateControlsAndCamera(float delta)
 {
-        particleSystem->control_forward = keyboard.getMappedKeyState(0, keyboardmap) - keyboard.getMappedKeyState(1, keyboardmap);
-        particleSystem->control_rotate = keyboard.getMappedKeyState(2, keyboardmap) - keyboard.getMappedKeyState(3, keyboardmap);
-        particleSystem->control_cannonball = keyboard.getMappedKeyState(0, {GLFW_KEY_C});
+    int shoot_key = GLFW_KEY_C;
+    std::vector<int> keyboardmap = {GLFW_KEY_T, GLFW_KEY_G, GLFW_KEY_F, GLFW_KEY_H};
+    if (gameMode) {
+        shoot_key = GLFW_KEY_SPACE;
+        keyboardmap = {GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_A, GLFW_KEY_D};
+    }
 
-        if (camera_follow) {
-            vec3 position = particleSystem->ship_position;
+    particleSystem->control_forward = keyboard.getMappedKeyState(0, keyboardmap) - keyboard.getMappedKeyState(1, keyboardmap);
+    particleSystem->control_rotate = keyboard.getMappedKeyState(2, keyboardmap) - keyboard.getMappedKeyState(3, keyboardmap);
+    particleSystem->control_cannonball = keyboard.getMappedKeyState(0, {shoot_key});
 
-            // from camera.cpp PixelRay()
-            vec3 p = camera.ViewToWorld(camera.NormalizedToView({0, 0, 1}));
-            vec3 camera_position = camera.getPosition();
-            vec3 camera_direction = (p - camera_position).normalized();
-            particleSystem->camera_direction = camera_direction;
+    if (camera_follow) {
+        vec3 position = particleSystem->ship_position;
+
+        // from camera.cpp PixelRay()
+        vec3 p = camera.ViewToWorld(camera.NormalizedToView({0, 0, 1}));
+        vec3 camera_position = camera.getPosition();
+        vec3 camera_direction = (p - camera_position).normalized();
+        particleSystem->camera_direction = camera_direction;
             
-            //vec3 new_camera_position = position + vec3{10, 20, 0};
-            vec3 camera_offset = {0, 5, 0};
-            float camera_distance = 20;
-            vec3 new_camera_position = position + camera_offset - camera_direction * camera_distance;
+        //vec3 new_camera_position = position + vec3{10, 20, 0};
+        vec3 camera_offset = {0, 5, 0};
+        float camera_distance = 20;
+        vec3 new_camera_position = position + camera_offset - camera_direction * camera_distance;
 
-            //vec3 up = camera_direction.cross(vec3{0, 1, 0}).cross(camera_direction).normalized();
-            vec3 up = {0, 1, 0};
+        //vec3 up = camera_direction.cross(vec3{0, 1, 0}).cross(camera_direction).normalized();
+        vec3 up = {0, 1, 0};
 
-            //camera.setView(camera_position, camera_position + camera_direction, up); // default (doesnt change anything)
-            camera.setView(new_camera_position, new_camera_position + camera_direction, up);
-        }
+        //camera.setView(camera_position, camera_position + camera_direction, up); // default (doesnt change anything)
+        camera.setView(new_camera_position, new_camera_position + camera_direction, up);
+    }
+}
+
+void Agphys::toggleGameMode() {
+    gameMode = !gameMode;
+    camera_follow = !camera_follow;
+    shouldRenderGUI = !shouldRenderGUI;
+    showSaigaGui = !showSaigaGui;
+    renderer->timer->Enable(false);
+    renderer->window->setShowImgui(false);
+    editor_gui.enabled = false;
+    //main_menu.EraseItem("Saiga", "Log");
 }

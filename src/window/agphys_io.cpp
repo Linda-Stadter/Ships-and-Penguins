@@ -40,7 +40,7 @@ void Agphys::renderGUI()
         ImGui::Checkbox("renderShadows", &renderShadows);
         ImGui::Checkbox("showSaigaGui", &showSaigaGui);
 
-        if (ImGui::Button("Pause (H)"))
+        if (ImGui::Button("Pause (K)"))
         {
             pause = !pause;
         }
@@ -122,12 +122,7 @@ void Agphys::keyPressed(int key, int scancode, int mods)
         case GLFW_KEY_F12:
             break;
         case GLFW_KEY_F1:
-            shouldRenderGUI = !shouldRenderGUI;
-            showSaigaGui = !showSaigaGui;
-            renderer->timer->Enable(false);
-            renderer->window->setShowImgui(false);
-            editor_gui.enabled = false;
-            //main_menu.EraseItem("Saiga", "Log");
+            toggleGameMode();
             break;
         case GLFW_KEY_F3:
             shouldRenderGUI = !shouldRenderGUI;

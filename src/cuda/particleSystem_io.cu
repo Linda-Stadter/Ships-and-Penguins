@@ -72,23 +72,44 @@ void ParticleSystem::renderIngameGUI()
 {
     // game ui
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(200, 900), ImGuiCond_Always);
-    if(ImGui::Begin("TEST", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
+    ImGui::SetNextWindowSize(ImVec2(500, 1000*2), ImGuiCond_Always);
+    if(ImGui::Begin("HUD", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
     {
+        ImGui::SetWindowFontScale(2.0);
         ImGui::TextColored(ImColor(1.f, 1.f, 1.f, 1.f), "Time: ");
         int reload_bar_length = 10;
         int reload_bar_progress = (float)cannon_timer / (float)cannon_timer_reset * reload_bar_length;
-        std::string reload = "reload: ";
+        std::string reload = "reload: [";
         for (int i = 0; i < reload_bar_progress; i++) {
             reload.append("#");
         }
-        ImColor reload_color = ImColor(1.f, 1.f, 1.f, 1.f);
-        if (reload_bar_progress == reload_bar_length)
-            reload_color = ImColor(.5f, 1.f, .5f, 1.f);
+        std::string reload2 = "";
+        for (int i = reload_bar_progress; i < reload_bar_length; i++) {
+            reload2.append("#");
+        }
+        reload2.append("]");
+
+        ImColor reload_color = ImColor(1.f, 1.f, 1.f, 1.f); // white
+        ImColor reload_color2 = ImColor(1.f, .1f, .1f, 1.f); // red
+        if (reload_bar_progress == reload_bar_length) {
+            reload_color = ImColor(.1f, 1.f, .1f, 1.f); // green
+            reload_color2 = reload_color;
+        }
         ImGui::TextColored(reload_color, reload.c_str());
-        std::string score_string= "Score: ";
+        ImGui::SameLine();
+        ImGui::TextColored(reload_color2, reload2.c_str());
+        std::string score_string = "Score: ";
         score_string.append(std::to_string(score));
         ImGui::TextColored(ImColor(1.f, 1.f, 1.f, 1.f), score_string.c_str());
+    }
+    ImGui::End();
+
+    ImGui::SetNextWindowPos(ImVec2(1920/2, 1080/2), ImGuiCond_Always);
+    //ImGui::SetNextWindowSize(ImVec2(1920, 1080), ImGuiCond_Always);
+    if(ImGui::Begin("crosshair", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
+    {
+        ImGui::SetWindowFontScale(2.0);
+        ImGui::TextColored(ImColor(1.f, 0.f, 1.f, 1.f), "+");
     }
     ImGui::End();
 }
