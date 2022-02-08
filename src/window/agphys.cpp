@@ -142,7 +142,7 @@ void Agphys::loadScenario()
         boxDim ={40, 80, 30};
     } else if (scenario == 14) {
         // change to resize ocean
-        float height = 5;
+        float height = 4;
         fluidDim = {180, height, 180}; // width in x and z direction in particles
         trochoidal1Dim = {5, height, 5}; // width of one side in -x, +x, -z and +z direction in particles
         trochoidal2Dim = {50, 1, 50};
@@ -154,12 +154,13 @@ void Agphys::loadScenario()
         trochoidal2Particles *= trochoidal2Dim[1];
 
         int fluidParticles = fluidDim[0] * fluidDim[2] * height;
-        numberParticles = trochoidal1Particles + trochoidal2Particles + fluidParticles;
+        int rbParticles = 22480;
+        numberParticles = trochoidal1Particles + trochoidal2Particles + fluidParticles + rbParticles;
         
         int heightDifference = height - trochoidal2Dim[1];
         int firstLayer = (fluidDim[0] * trochoidal1Dim[0] * 2 + fluidDim[2] * trochoidal1Dim[2] * 2 + trochoidal1Dim[0] * trochoidal1Dim[2] * 4) * heightDifference + fluidDim[0] * fluidDim[2] * heightDifference;
 
-        layers = ivec2(firstLayer, numberParticles);
+        layers = ivec2(firstLayer + rbParticles, numberParticles);
         distance = 0.5;
         xCount = (int) (fluidDim[0] + trochoidal1Dim[0] * 2);
         zCount = (int) (fluidDim[2] + trochoidal1Dim[2] * 2);

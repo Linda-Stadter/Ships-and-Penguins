@@ -87,16 +87,19 @@ __global__ void updateParticlesPBD2(float dt, Saiga::ArrayView<Particle>particle
     p.lambda = 0;
 }
 
-__global__ void resetOcean(Saiga::ArrayView<Particle> d_particles, int startId, int endId, int xMax, int zMax, vec3 corner, vec4 color, vec3 fluidDim) {
+__global__ void resetOcean(Saiga::ArrayView<Particle> d_particles, int startId, int endId, int xMax, int zMax, vec3 corner, vec4 color, vec3 fluidDim, int particleCountRB) {
     Saiga::CUDA::ThreadInfo<> ti;
     int id = ti.thread_id;
 
     if (id >= startId && id < endId) {
+        if (id > particleCountRB) {
+            id -= particleCountRB;
+        }
         int y = (id - startId) / (xMax * zMax);
         int z = ((id - startId) - (y * xMax * zMax)) / xMax;
         int x = ((id - startId) - (y * xMax * zMax)) % xMax;
 
-        Particle &p = d_particles[id];
+        Particle &p = d_particles[ti.thread_id];
         // for fluids
         int matId = -2;
         float distance = 0.5;
@@ -1161,7 +1164,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         wave_number = 3.5;
         steepness = 0.35;
         wind_direction = {-1.0, 0.0, -1.0};
-        wind_speed = 0.7;
+        wind_speed = 0.9;
         solver_iterations = 1;
         c_viscosity = 0.02;
         epsilon_vorticity = 0.001;
@@ -1169,7 +1172,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
 
         // adds trochoidal particles
         // generate first layers of fluids and trochoidals
-        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, 0, layers[0], x, z, corner, color, fluidDim);
+        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, 0, layers[0], x, z, corner, color, fluidDim, 22480);
         CUDA_SYNC_CHECK_ERROR();
 
         // generate top layer of fluids and trochoidals
@@ -1183,7 +1186,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         this->fluidDim = fluidDim;
         enemyGridCell = fluidDim[0] / enemyGridDim;
 
-        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, layers[0], layers[1], x, z, corner, color, fluidDim);
+        resetOcean<<<BLOCKS, BLOCK_SIZE>>>(d_particles, layers[0], layers[1], x, z, corner, color, fluidDim, 0);
         CUDA_SYNC_CHECK_ERROR();
 
         resetEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_enemyGridWeight, enemyGridDim);
@@ -1337,7 +1340,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         pos ={0, 10.3, 0.};
         vec4 cannon_color ={0.54, 0.79, 0.84, 1.0};
         objects["cannon"] = rigidBodyCount;
-        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, cannon_color, cannonModel, 0.05, 0.001, 28, false);
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, cannon_color, cannonModel, 0.06, 0.001, 23, false);
         particleCountRB += objParticleCount;
     }
 
@@ -1390,6 +1393,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     int reset = 0;
     checkError(cudaMemcpy(d_score, &reset, sizeof(int), cudaMemcpyHostToDevice));
     score = 0;
+    printf("particle Count RB %i\n", particleCountRB);
 }
 
 // 4.0
@@ -2423,16 +2427,22 @@ __device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, Rigid
     vec3 direction3d = rigidBodies[rbID].A * vec3{0, 0, 1};
     vec3 direction2d ={direction3d.x(), -0.01, direction3d.z()};
     direction2d.normalize();
-    rigidBodies[rbID].originOfMass += direction2d * forward * 0.003;
+    float speed = 0.003;
 
     // fix ships in trochoidal area
     vec3 originOfMass = rigidBodies[rbID].originOfMass;
     if (originOfMass[0] <= -fluidDim[0]/2 || originOfMass[0] >= fluidDim[0]/2 || originOfMass[2] <= -fluidDim[2]/2 || originOfMass[2] >= fluidDim[2]/2) {
-        if (originOfMass[1] < 2.5)
+        // slow down velocity
+        rigidBodies[rbID].originOfMass += direction2d * forward * speed * 0.4;
+        if (originOfMass[1] < 2.7)
             rigidBodies[rbID].originOfMass[1] += 0.003;
         if (originOfMass[1] < 2)
             rigidBodies[rbID].originOfMass[1] = 2;
+        return;
     }
+
+    // for ships inside fluid area
+    rigidBodies[rbID].originOfMass += direction2d * forward * speed;
 }
 
 
