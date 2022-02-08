@@ -138,7 +138,10 @@ class SAIGA_ALIGN(16) ParticleSystem
     vec3 wind_direction = {-1, 0, 0};
     float wind_speed = 0.7;
 
+    // everything in seconds
     float last_dt = 0;
+    float passed_time = 0;
+    float max_time = 180;
 
     int *d_rayHitCount;
     int *d_score;
@@ -166,6 +169,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     float cannon_timer_reset = 120;
 
     int score = 0;
+    bool game_over = false;
 
     // map parameters
     vec3 mapDim ={0, 0, 0};

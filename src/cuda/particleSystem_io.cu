@@ -76,7 +76,21 @@ void ParticleSystem::renderIngameGUI()
     if(ImGui::Begin("HUD", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
     {
         ImGui::SetWindowFontScale(2.0);
-        ImGui::TextColored(ImColor(1.f, 1.f, 1.f, 1.f), "Time: ");
+        std::string time = "Time: ";
+        int total_seconds = max_time - passed_time;
+        int minutes = total_seconds / 60;
+        int seconds = total_seconds % 60;
+        std::string str_minutes = std::to_string(minutes);
+        std::string str_seconds = std::to_string(seconds);
+        if (minutes < 10)
+            str_minutes = "0" + str_minutes;
+        if (seconds < 10)
+            str_seconds = "0" + str_seconds;
+        time.append(str_minutes + ":" + str_seconds);
+        ImColor time_color = ImColor(1.f, 1.f, 1.f, 1.f);
+        if (total_seconds <= 10.0)
+            time_color = ImColor(1.f, .1f, .1f, 1.f); // red
+        ImGui::TextColored(time_color, time.c_str());
         int reload_bar_length = 10;
         int reload_bar_progress = (float)cannon_timer / (float)cannon_timer_reset * reload_bar_length;
         std::string reload = "reload: [";
@@ -104,12 +118,27 @@ void ParticleSystem::renderIngameGUI()
     }
     ImGui::End();
 
-    ImGui::SetNextWindowPos(ImVec2(1920/2, 1080/2), ImGuiCond_Always);
-    //ImGui::SetNextWindowSize(ImVec2(1920, 1080), ImGuiCond_Always);
-    if(ImGui::Begin("crosshair", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
-    {
-        ImGui::SetWindowFontScale(2.0);
-        ImGui::TextColored(ImColor(1.f, 0.f, 1.f, 1.f), "+");
+    if (game_over) {
+        ImGui::SetNextWindowPos(ImVec2(1920/2, 1080/2), ImGuiCond_Always);
+        //ImGui::SetNextWindowSize(ImVec2(1920, 1080), ImGuiCond_Always);
+        if(ImGui::Begin("game over", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
+        {
+            ImGui::SetWindowFontScale(2.0);
+            std::string score_string = "Your Score: ";
+            score_string.append(std::to_string(score));
+            
+            ImGui::TextColored(ImColor(1.f, 0.f, 1.f, 1.f), score_string.c_str());
+        }
+        ImGui::End();
+    } else {
+        ImGui::SetNextWindowPos(ImVec2(1920/2, 1080/2), ImGuiCond_Always);
+        //ImGui::SetNextWindowSize(ImVec2(1920, 1080), ImGuiCond_Always);
+        if(ImGui::Begin("crosshair", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
+        {
+            ImGui::SetWindowFontScale(2.0);
+            ImGui::TextColored(ImColor(1.f, 0.f, 1.f, 1.f), "+");
+        }
+        ImGui::End();
     }
-    ImGui::End();
+    
 }

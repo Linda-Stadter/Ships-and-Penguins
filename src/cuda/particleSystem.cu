@@ -1405,6 +1405,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     int reset = 0;
     checkError(cudaMemcpy(d_score, &reset, sizeof(int), cudaMemcpyHostToDevice));
     score = 0;
+    passed_time = 0;
     printf("particle Count RB %i\n", particleCountRB);
 }
 
@@ -2635,6 +2636,12 @@ void ParticleSystem::computeScore() {
 
 void ParticleSystem::update(float dt) {
     last_dt = dt;
+    passed_time += dt;
+    if (passed_time >= max_time) {
+        passed_time = max_time;
+        game_over = true;
+        return;
+    }
     if (physics_mode == 0) {      
         const unsigned int BLOCKS_CELLS = Saiga::CUDA::getBlockCount(cellCount, BLOCK_SIZE);
 
