@@ -31,6 +31,8 @@ struct ClothBendingConstraint {
 struct ShipInfo {
     int id;
     int rbID;
+    int shipStart;
+    int penguinStart;
     int clothStart;
     int clothEnd;
     int constraintsStart;
@@ -76,6 +78,9 @@ class SAIGA_ALIGN(16) ParticleSystem
     ShipInfo *d_shipInfos;
     int *d_shipInfosCounter;
     int maxShipNum = 20;
+
+    int particleFishStart;
+    int fishID;
 
     int *d_constraintCounter;
     int *d_constraintList;

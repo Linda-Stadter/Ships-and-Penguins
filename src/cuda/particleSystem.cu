@@ -1076,6 +1076,8 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
 
     shipInfos.push_back({0,
         rigidBodyCount - 2,
+        particleShipStart,
+        particlePenguinStart,
         particleClothStart,
         particleClothStart + clothParticleCount,
         constraintsStart,
@@ -1292,6 +1294,8 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         vec3 pos ={0, 20, 0};
 
         // spawns cannonball
+        particleFishStart = particleCountRB;
+        fishID = rigidBodyCount;
         Saiga::UnifiedModel fishModel("objs/fish.obj");
         objects["ball_1"] = rigidBodyCount;
         vec4 fish_color ={0.77, 0.65, 0.46, 1};
@@ -2770,12 +2774,39 @@ __global__ void rayExplosion(Saiga::ArrayView<Particle> particles, Saiga::Ray ra
     list[ti.thread_id].second = 0;
 }
 
-__global__ void rayInfo(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, thrust::pair<int, float> *list, int *rayHitCount, int min) {
+__global__ void rayInfo(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, thrust::pair<int, float> *list, int *rayHitCount, int min, RigidBody *d_rigidBodies, ClothConstraint *d_constraintListCloth, ShipInfo *d_shipInfos, int *d_shipInfosCounter, int fishID, int fishStart) {
     Saiga::CUDA::ThreadInfo<> ti;
     if (ti.thread_id >= 1000)
         return;
     if (ti.thread_id == 0) {
-        printf("idx: %i; id: %i; rb:%i\n", list[min].first, particles[list[min].first].id, particles[list[min].first].rbID);
+        Particle &particle = particles[list[min].first];
+        printf("Particle Info:\n");
+        printf("idx: %i; id: %i; rbID: %i, position: %f, radius: %f, mass: %f, rgb: %f, %f, %f;\n", list[min].first, particle.id, particle.rbID, particle.predicted, particle.radius, 1.0f/particle.massinv, particle.color[0], particle.color[1], particle.color[2]);
+        int shipIdx = -1;
+        bool penguin = false;
+        for (int idx = 0; idx < *d_shipInfosCounter; idx++) {
+            ShipInfo &shipInfo = d_shipInfos[idx];
+            if (particle.rbID == shipInfo.rbID || particle.rbID == shipInfo.penguinID) {
+                shipIdx = idx;
+                break;
+            }
+        }
+        if (shipIdx > -1) {
+            ShipInfo &shipInfo = d_shipInfos[shipIdx];
+            int offset = 0;
+            if (particle.rbID == shipInfo.penguinID) {
+                penguin = true;
+                printf("penguin ");
+                offset = particle.id - shipInfo.penguinStart;
+            } else {
+                offset = particle.id - shipInfo.shipStart;
+            }
+
+            printf("belongs to ship: %i, model rbID: %i; offset in model: %i\n", shipIdx, particle.rbID, offset);
+        } else if (particle.rbID == fishID) {
+            int offset = particle.id - fishStart;
+            printf("Fish: model rbID: %i; offset in model: %i\n", particle.rbID, offset);
+        }
     }
     list[ti.thread_id].second = 0;
 }
@@ -2817,7 +2848,7 @@ void ParticleSystem::ray(Saiga::Ray ray) {
     } else if (action_mode == 3) {
         rayExplosion<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, false, explosion_force);
     } else if (action_mode == 4) {
-        rayInfo<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min);
+        rayInfo<<<BLOCKS, BLOCK_SIZE>>>(d_particles, ray, thrust::raw_pointer_cast(&d_vec[0]), d_rayHitCount, min, d_rigidBodies, d_constraintListCloth, d_shipInfos, d_shipInfosCounter, fishID, particleFishStart);
     }
     CUDA_SYNC_CHECK_ERROR();
 }
