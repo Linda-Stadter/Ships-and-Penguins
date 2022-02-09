@@ -1881,6 +1881,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         vec4 ice_color = {.95, .95, .95, 1};
         float ice_mass = 0.15;
 
+        objects["ice_start"] = rigidBodyCount;
         vec3 icePos = {20, 3, 20};
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.2, ice_mass, 20, false);
         particleCountRB += objParticleCount;
@@ -1893,6 +1894,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel2, 0.3, ice_mass, 20, false);
         particleCountRB += objParticleCount;
 
+        objects["ice_end"] = rigidBodyCount;
         icePos = {20, 3, -30};
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.3, ice_mass, 20, false);
         particleCountRB += objParticleCount;
@@ -3105,14 +3107,14 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
 
         int row = int((originOfMass[2] + fluidDim[2]/2) / enemyGridCell);
         int col = int((originOfMass[0] + fluidDim[0]/2) / enemyGridCell);
-        static const int X_CONSTS[9] ={-1, 0, 1, -1, 0, 1, -1, 0, 1};
-        static const int Z_CONSTS[9] ={-1, -1, -1, 0, 0, 0, 1, 1, 1};
+        static const int X_CONSTS[14] ={-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -2, 2};
+        static const int Z_CONSTS[14] ={-1, -1, -1, 0, 0, 0, 1, 1, 1, 2, 2, 2, 0, 0,};
 
         // enemies should aim towards +z direction
         vec3 flee = vec3(0, 0, 1);
         // check all neighboring grid fields
         // TODO increase radius
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 14; i++) {
             int y = row + X_CONSTS[i];
             int x = col + Z_CONSTS[i];
             if (y >= 0 && y < enemyGridDim && x >= 0 && x < enemyGridDim) {
@@ -3142,9 +3144,11 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
     }
 }
 
-__global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim, float enemyGridCell, int ball) {
+__global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim, float enemyGridCell, int ball1Id, int ball2Id, int iceStartId, int iceEndId, bool regular_ball) {
     Saiga::CUDA::ThreadInfo<> ti;
     bool is_ship_rbID = false;
+
+    int ballId = (regular_ball) ? ball1Id : ball2Id;
     for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx++) {
         ShipInfo &shipInfo = d_shipInfos[shipIdx];
         if (ti.thread_id == shipInfo.rbID) {
@@ -3153,7 +3157,7 @@ __global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *r
         }
     }
 
-    if (is_ship_rbID || ti.thread_id == 0 || ti.thread_id == ball) {
+    if (is_ship_rbID || ti.thread_id == 0 || ti.thread_id == ballId || ti.thread_id >= iceStartId && ti.thread_id < iceEndId) {
 
         vec3 originOfMass = rigidBodies[ti.thread_id].originOfMass;
 
@@ -3166,10 +3170,10 @@ __global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *r
             if (ti.thread_id == 0) {
                 weight = 5;
             }
-            else if (ti.thread_id == ball) {
+            else if (ti.thread_id == ballId) {
                 weight = 2;
                 // discard ball if it is underwater
-                if (originOfMass[1] < 2)
+                if (originOfMass[1] < 1.5)
                     return;
             }
 
@@ -3216,7 +3220,8 @@ void ParticleSystem::update(float dt) {
 
         float random = linearRand(-0.9, 0.9);
         resetEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_enemyGridWeight, enemyGridDim);
-        fillEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"]);
+        fillEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, 
+            d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"], objects["ball_2"], objects["ice_start"], objects["ice_end"]+1, regular_ball);
         
         updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth, objects["cannon"], objects["player_penguin"]);
 

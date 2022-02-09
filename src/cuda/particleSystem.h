@@ -103,7 +103,7 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     int *d_enemyGridWeight;
     int *d_enemyGridId;
-    int enemyGridDim = 15;
+    int enemyGridDim = 20;
     float enemyGridCell = 0;
 
     vec3 gravity = {0, -9.81, 0};
