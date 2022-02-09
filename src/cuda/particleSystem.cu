@@ -936,7 +936,92 @@ __global__ void resetEnemyGrid(int *d_enemyGridWeight, int enemyGridDim) {
     d_enemyGridWeight[ti.thread_id] = 0;
 }
 
-void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedModel shipModel, float scaling, float particleMass = 1, float maxObjParticleCount = 30) {
+__device__ int getPrintChar(const char c, int x, int y) {
+    const int width = 16;
+    const int height = 10;
+    char l_char[height][width] = {
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    };
+
+    char g_char[height][width] = {
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+        {0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0},
+        {0,0,1,1,1,1,1,1,0,0,0,0,1,1,1,0},
+        {0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0},
+        {0,1,1,1,1,0,0,0,1,1,1,1,1,1,1,0},
+        {0,1,1,1,1,0,0,0,1,1,1,1,1,1,1,0},
+        {0,1,1,1,1,1,0,0,0,0,0,1,1,1,1,0},
+        {0,0,1,1,1,1,1,0,0,0,0,1,1,1,1,0},
+        {0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    };
+
+    char d_char[height][width] = {
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+        {0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0},
+        {0,1,1,1,1,0,0,0,0,1,1,1,1,1,0,0},
+        {0,1,1,1,1,0,0,0,0,0,1,1,1,1,0,0},
+        {0,1,1,1,1,0,0,0,0,0,0,1,1,1,1,0},
+        {0,1,1,1,1,0,0,0,0,0,0,1,1,1,1,0},
+        {0,1,1,1,1,0,0,0,0,0,1,1,1,1,0,0},
+        {0,1,1,1,1,0,0,0,0,1,1,1,1,1,0,0},
+        {0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    };
+
+    char v_char[height][width] = {
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1},
+        {1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,0},
+        {0,1,1,1,1,0,0,0,0,0,0,1,1,1,1,0},
+        {0,1,1,1,1,0,0,0,0,0,1,1,1,1,0,0},
+        {0,0,1,1,1,1,0,0,0,0,1,1,1,1,0,0},
+        {0,0,1,1,1,1,0,0,0,1,1,1,1,0,0,0},
+        {0,0,0,1,1,1,1,0,0,1,1,1,1,0,0,0},
+        {0,0,0,1,1,1,1,0,1,1,1,1,0,0,0,0},
+        {0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0},
+        {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    };
+
+    switch (c) {
+        case 'L':
+            return l_char[y][x];
+        case 'G':
+            return g_char[y][x];
+        case 'D':
+            return d_char[y][x];
+        case 'V':
+            return v_char[y][x];
+        default:
+            return 0;
+    }
+}
+
+__global__ void printCharOnSail(Saiga::ArrayView<Particle> d_particles, int start_id, int width, int height, const char printChar) {
+    Saiga::CUDA::ThreadInfo<> ti;
+
+    if (ti.thread_id > 0)
+        return;
+
+    vec4 red = vec4(239.0/256, 52.0/256, 39.0/256, 1);
+    for (int x = 0; x < width; x++) {
+        for (int y = 0; y < height; y++) {
+            if (getPrintChar(printChar, x, height - y - 1))
+                d_particles[start_id + y * width + x].color = red;
+        }
+    }
+
+}
+
+void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedModel shipModel, float scaling, float particleMass = 1, float maxObjParticleCount = 30, char printChar='X') {
     float randInitMul = 0;
 
     vec3 rot = {0,0,0};
@@ -1033,6 +1118,10 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     vec3 clothCorner = {-1, 2.75, 2.5};
     int clothParticleCount = dimX * dimZ;
     initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, clothParticleCount, dimX, 1, clothCorner + spawnPos, clothDistance, d_particles, randInitMul, sailThickness, rbID, color, false, 0.01);
+
+    // print char
+    if (print_LGDV_logo && printChar != 'X')
+        printCharOnSail<<<1, 32>>>(d_particles, particleClothStart, dimX, dimZ, printChar);
 
     // fix upper row
     //initParticles<<<BLOCKS, BLOCK_SIZE>>>(particleCountRB, dimX, dimX, 1, clothCorner + spawnPos, clothDistance, d_particles, randInitMul, 0.35, rbID, color, true, 0.1);
@@ -1770,19 +1859,19 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         // spawns enemies
         pos ={2, 3, 2};
         objects["enemy_1"] = rigidBodyCount;
-        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"], 'L');
 
         pos ={-15, 3, -25};
         objects["enemy_2"] = rigidBodyCount;
-        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"], 'G');
 
         pos ={17, 3, 10};
         objects["enemy_3"] = rigidBodyCount;
-        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"], 'D');
 
         pos ={15, 3, -10};
         objects["enemy_4"] = rigidBodyCount;
-        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
+        spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"], 'V');
 
         pos ={5, 3, -11};
         objects["enemy_5"] = rigidBodyCount;

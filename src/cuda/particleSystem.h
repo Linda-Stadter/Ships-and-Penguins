@@ -69,7 +69,9 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass, float maxParticleCount, bool stripes);
     int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass, float scaling, float particleRadius, bool noSDF);
-    void spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedModel shipModel, float scaling, float particleMass, float maxObjParticleCount);
+    void spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedModel shipModel, float scaling, float particleMass, float maxObjParticleCount, char printChar);
+
+    bool print_LGDV_logo = true;
 
     std::vector<ClothConstraint> clothConstraints;
     std::vector<ClothBendingConstraint> clothBendingConstraints;
