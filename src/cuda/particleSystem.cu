@@ -2680,7 +2680,7 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
         vec3 fluidDim_neg = -fluidDim/2 + vec3(2, 2, 2);
         vec3 fluidDim_pos = fluidDim/2 - vec3(2, 2, 2);
         if (pa.predicted[0] <= fluidDim_neg[0] || pa.predicted[2] <= fluidDim_neg[2] || pa.predicted[0] >= fluidDim_pos[0] || pa.predicted[2] >= fluidDim_pos[2]) {
-            particles[ti.thread_id].color ={0, 0, 0.8, 1};
+            particles[ti.thread_id].color = vec4(0.1, 0.1, 0.8, 1);
             return;
         }
 
@@ -2897,7 +2897,7 @@ __device__ vec4 colorTrochoidalParticles(vec3 position, vec3 old_position, vec4 
     }
 
     if (color[2] <= 0.8) {
-        color = vec4(0, 0, 0.8, 1);
+        color = vec4(0.1 + 0.05*rand, 0.1 + 0.05*rand, 0.8, 1);
     }
 
     return color;
