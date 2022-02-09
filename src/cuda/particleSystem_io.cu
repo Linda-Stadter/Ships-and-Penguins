@@ -76,6 +76,8 @@ void ParticleSystem::renderIngameGUI()
     if(ImGui::Begin("HUD", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
     {
         ImGui::SetWindowFontScale(2.0);
+
+        // Time
         std::string time = "Time: ";
         int total_seconds = max_time - passed_time;
         int minutes = total_seconds / 60;
@@ -91,6 +93,23 @@ void ParticleSystem::renderIngameGUI()
         if (total_seconds <= 10.0)
             time_color = ImColor(1.f, .1f, .1f, 1.f); // red
         ImGui::TextColored(time_color, time.c_str());
+
+        // ammo
+        std::string fish_count = "Fish left: ";
+        fish_count.append(std::to_string(ammo_left));
+        std::string fish_type = "Current Fish: ";
+        if (regular_ball) {
+            fish_type.append("Pufferfish");
+        } else {
+            fish_type.append("Swordfish");
+        }
+        ImColor fish_count_color = ImColor(1.f, 1.f, 1.f, 1.f);
+        if (ammo_left <= 1)
+            fish_count_color = ImColor(1.f, .1f, .1f, 1.f); // red
+        ImGui::TextColored(fish_count_color, fish_count.c_str());
+        ImGui::TextColored(ImColor(1.f, 1.f, 1.f, 1.f), fish_type.c_str());
+
+        // reload
         int reload_bar_length = 10;
         int reload_bar_progress = (float)cannon_timer / (float)cannon_timer_reset * reload_bar_length;
         std::string reload = "reload: [";
@@ -112,6 +131,8 @@ void ParticleSystem::renderIngameGUI()
         ImGui::TextColored(reload_color, reload.c_str());
         ImGui::SameLine();
         ImGui::TextColored(reload_color2, reload2.c_str());
+
+        // Score
         std::string score_string = "Score: ";
         score_string.append(std::to_string(score));
         ImGui::TextColored(ImColor(1.f, 1.f, 1.f, 1.f), score_string.c_str());

@@ -175,6 +175,12 @@ class SAIGA_ALIGN(16) ParticleSystem
     bool game_over = false;
     bool regular_ball = true;
 
+    // ammo
+    bool bonus_flag = false;
+    int bonus_score = 0;
+    int ammo_left = 3;
+    int ammo_bonus = 2;
+
     // map parameters
     vec3 mapDim ={0, 0, 0};
     vec3 fluidDim ={0, 0, 0};

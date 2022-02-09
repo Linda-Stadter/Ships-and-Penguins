@@ -2037,9 +2037,14 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     CUDA_SYNC_CHECK_ERROR();
     int reset = 0;
     checkError(cudaMemcpy(d_score, &reset, sizeof(int), cudaMemcpyHostToDevice));
+
+    // reset game values
     score = 0;
     passed_time = 0;
+    bonus_flag = false;
+    ammo_left = 3;
     game_over = false;
+
     colorObjects<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_shipInfos, d_shipInfosCounter, particleFishStart, particleSwordfishStart, cannonStart, playerPenguinStart);
 }
 
@@ -3286,11 +3291,20 @@ void ParticleSystem::computeScore() {
 
 void ParticleSystem::update(float dt) {
     last_dt = dt;
-    passed_time += dt;
     if (passed_time >= max_time) {
         passed_time = max_time;
         game_over = true;
         return;
+    }
+    if (ammo_left <= 0 && cannon_timer >= cannon_timer_reset) {
+        game_over = true;
+        return;
+    }
+    passed_time += dt;
+    if (bonus_flag && score > bonus_score) {
+        bonus_flag = false;
+        bonus_score = 0;
+        ammo_left += ammo_bonus;
     }
     if (physics_mode == 0) {      
         const unsigned int BLOCKS_CELLS = Saiga::CUDA::getBlockCount(cellCount, BLOCK_SIZE);
@@ -3299,12 +3313,17 @@ void ParticleSystem::update(float dt) {
         resetCellListOptimized<<<BLOCKS_CELLS, BLOCK_SIZE>>>(d_cell_list, cellCount, particleCount);
         CUDA_SYNC_CHECK_ERROR();
 
-        if (control_cannonball == 1 && (cannon_timer >= cannon_timer_reset || debug_shooting)) {
+        if (control_cannonball == 1 && (cannon_timer >= cannon_timer_reset || debug_shooting) && ammo_left > 0) {
             resetHits<<<BLOCKS, BLOCK_SIZE>>>(d_particleHits, particleCount, d_rbHits, rigidBodyCount);
             CUDA_SYNC_CHECK_ERROR();
             shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, cannonball_speed, objects["player"], objects["ball_1"], objects["ball_2"], objects["cannon"], regular_ball);
             CUDA_SYNC_CHECK_ERROR();
             cannon_timer = 0;
+
+            // ammo
+            ammo_left--;
+            bonus_flag = true;
+            bonus_score = score;
         }
 
         float random = linearRand(-0.9, 0.9);
