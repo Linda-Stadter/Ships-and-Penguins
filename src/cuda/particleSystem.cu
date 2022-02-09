@@ -1204,7 +1204,7 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     particleCountRB += clothParticleCount;
 }
 
-__global__ void colorObjects(Saiga::ArrayView<Particle> d_particles, RigidBody *rigidBodies, ShipInfo* d_shipInfos, int* d_shipInfosCounter, int ball_1, int fishStart, int cannonStart, int playerPenguinStart) {
+__global__ void colorObjects(Saiga::ArrayView<Particle> d_particles, RigidBody *rigidBodies, ShipInfo* d_shipInfos, int* d_shipInfosCounter, int fishStart, int swordfishStart, int cannonStart, int playerPenguinStart) {
     Saiga::CUDA::ThreadInfo<> ti;
 
     vec4 white = vec4(0.95, 0.93, 0.93, 1);
@@ -1213,6 +1213,7 @@ __global__ void colorObjects(Saiga::ArrayView<Particle> d_particles, RigidBody *
     vec4 wood ={0.36, 0.23, 0.10, 1};
     vec4 brown = vec4(0.54, 0.45, 0.33, 1);
     vec4 light_brown = vec4(0.60, 0.51, 0.39, 1);
+    vec4 blue = vec4(0.51, 0.57, 0.58, 1);
 
     // color penguin
     for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx++) {
@@ -1352,6 +1353,67 @@ __global__ void colorObjects(Saiga::ArrayView<Particle> d_particles, RigidBody *
         // mouth
         d_particles[fishStart + 301].color = brown;
         d_particles[fishStart + 202].color = brown;
+
+        d_particles[swordfishStart + 92].color = black;
+        d_particles[swordfishStart + 91].color = white;
+        d_particles[swordfishStart + 62].color = white;
+        d_particles[swordfishStart + 84].color = white;
+        d_particles[swordfishStart + 122].color = white;
+        d_particles[swordfishStart + 171].color = white;
+        // lid
+        d_particles[swordfishStart + 138].color = blue;
+        d_particles[swordfishStart + 100].color = blue;
+
+        d_particles[swordfishStart + 107].color = blue;
+        d_particles[swordfishStart + 145].color = blue;
+        d_particles[swordfishStart + 178].color = white;
+        d_particles[swordfishStart + 129].color = white;
+        d_particles[swordfishStart + 68].color = white;
+        d_particles[swordfishStart + 99].color = black;
+        d_particles[swordfishStart + 137].color = white;
+        d_particles[swordfishStart + 130].color = white;
+        //d_particles[swordfishStart + 131].color = black;
+
+        d_particles[swordfishStart + 151].color = blue;
+        d_particles[swordfishStart + 150].color = blue;
+        d_particles[swordfishStart + 191].color = blue;
+        d_particles[swordfishStart + 192].color = blue;
+        d_particles[swordfishStart + 235].color = blue;
+        d_particles[swordfishStart + 234].color = blue;
+        d_particles[swordfishStart + 233].color = blue;
+        d_particles[swordfishStart + 278].color = blue;
+        d_particles[swordfishStart + 279].color = blue;
+        d_particles[swordfishStart + 280].color = blue;
+        d_particles[swordfishStart + 281].color = blue;
+        d_particles[swordfishStart + 328].color = blue;
+        d_particles[swordfishStart + 327].color = blue;
+        d_particles[swordfishStart + 326].color = blue;
+        d_particles[swordfishStart + 325].color = blue;
+        d_particles[swordfishStart + 372].color = blue;
+        d_particles[swordfishStart + 374].color = blue;
+        d_particles[swordfishStart + 373].color = blue;
+        d_particles[swordfishStart + 375].color = blue;
+        d_particles[swordfishStart + 419].color = blue;
+        d_particles[swordfishStart + 418].color = blue;
+        d_particles[swordfishStart + 417].color = blue;
+        d_particles[swordfishStart + 416].color = blue;
+        d_particles[swordfishStart + 459].color = blue;
+        d_particles[swordfishStart + 460].color = blue;
+        d_particles[swordfishStart + 494].color = blue;
+        d_particles[swordfishStart + 493].color = blue;
+
+        d_particles[swordfishStart + 186].color = blue;
+        //d_particles[swordfishStart + 73].color = blue;
+        //d_particles[swordfishStart + 74].color = blue;
+        d_particles[swordfishStart + 110].color = blue;
+        d_particles[swordfishStart + 109].color = blue;
+        d_particles[swordfishStart + 149].color = blue;
+        d_particles[swordfishStart + 189].color = blue;
+        d_particles[swordfishStart + 231].color = blue;
+        d_particles[swordfishStart + 457].color = blue;
+        d_particles[swordfishStart + 454].color = blue;
+        d_particles[swordfishStart + 524].color = blue;
+        d_particles[swordfishStart + 525].color = blue;
 
         // left cannon
         d_particles[cannonStart + 1051].color = wood;
@@ -1853,7 +1915,15 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         Saiga::UnifiedModel fishModel("objs/fish.obj");
         objects["ball_1"] = rigidBodyCount;
         vec4 fish_color ={0.77, 0.65, 0.46, 1};
-        int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, fish_color, fishModel, 0.05, 0.01, 15, false);
+        int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, fish_color, fishModel, 0.05, 0.03, 15, false);
+        particleCountRB += objParticleCount;
+
+        pos ={0, 35, 0};
+        particleSwordfishStart = particleCountRB;
+        Saiga::UnifiedModel swordfishModel("objs/swordfish.obj");
+        objects["ball_2"] = rigidBodyCount;
+        fish_color ={0.64, 0.68, 0.69, 1};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, fish_color, swordfishModel, 0.05, 0.01, 37, false);
         particleCountRB += objParticleCount;
 
         // spawns enemies
@@ -1881,11 +1951,6 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         objects["enemy_6"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        // test penguin
-        //pos ={0, 11, 0};
-        //objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, penguin_color, penguinModel, pengunin_paramters["scaling"], pengunin_paramters["mass"], pengunin_paramters["particleCount"], true);
-        //printf("count %i", objParticleCount);
-        //particleCountRB += objParticleCount;
         cannonStart = particleCountRB;
         Saiga::UnifiedModel cannonModel("objs/cannon.obj");
         pos ={0, 30.3, 0.};
@@ -1905,6 +1970,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         vec4 ice_color = {.95, .95, .95, 1};
         float ice_mass = 0.15;
 
+        objects["ice_start"] = rigidBodyCount;
         vec3 icePos = {20, 3, 20};
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.2, ice_mass, 20, false);
         particleCountRB += objParticleCount;
@@ -1917,6 +1983,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel2, 0.3, ice_mass, 20, false);
         particleCountRB += objParticleCount;
 
+        objects["ice_end"] = rigidBodyCount;
         icePos = {20, 3, -30};
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.3, ice_mass, 20, false);
         particleCountRB += objParticleCount;
@@ -1973,8 +2040,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     score = 0;
     passed_time = 0;
     game_over = false;
-    printf("particle Count RB %i\n", particleCountRB);
-    colorObjects<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_shipInfos, d_shipInfosCounter, objects["ball_1"], particleFishStart, cannonStart, playerPenguinStart);
+    colorObjects<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_shipInfos, d_shipInfosCounter, particleFishStart, particleSwordfishStart, cannonStart, playerPenguinStart);
 }
 
 // 4.0
@@ -2889,8 +2955,9 @@ __global__ void updateTrochoidalParticles(Saiga::ArrayView<Particle> d_particles
     }
 }
 
-__global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 direction, float speed, int shipId, int ballId, int cannonId) {
+__global__ void shootCannon(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, vec3 direction, float speed, int shipId, int ball1Id, int ball2Id, int cannonId, bool regular_ball) {
     Saiga::CUDA::ThreadInfo<> ti;
+    int ballId = (regular_ball) ? ball1Id : ball2Id;
 
     if (ti.thread_id >= particles.size() || particles[ti.thread_id].rbID != ballId)
         return;
@@ -3129,14 +3196,14 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
 
         int row = int((originOfMass[2] + fluidDim[2]/2) / enemyGridCell);
         int col = int((originOfMass[0] + fluidDim[0]/2) / enemyGridCell);
-        static const int X_CONSTS[9] ={-1, 0, 1, -1, 0, 1, -1, 0, 1};
-        static const int Z_CONSTS[9] ={-1, -1, -1, 0, 0, 0, 1, 1, 1};
+        static const int X_CONSTS[14] ={-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -2, 2};
+        static const int Z_CONSTS[14] ={-1, -1, -1, 0, 0, 0, 1, 1, 1, 2, 2, 2, 0, 0,};
 
         // enemies should aim towards +z direction
         vec3 flee = vec3(0, 0, 1);
         // check all neighboring grid fields
         // TODO increase radius
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 14; i++) {
             int y = row + X_CONSTS[i];
             int x = col + Z_CONSTS[i];
             if (y >= 0 && y < enemyGridDim && x >= 0 && x < enemyGridDim) {
@@ -3166,9 +3233,11 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
     }
 }
 
-__global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim, float enemyGridCell, int ball) {
+__global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *rigidBodies, int * d_enemyGridWeight, int * d_enemyGridId, vec3 mapDim, vec3 fluidDim, ShipInfo* d_shipInfos, int* d_shipInfosCounter, float random, int enemyGridDim, float enemyGridCell, int ball1Id, int ball2Id, int iceStartId, int iceEndId, bool regular_ball) {
     Saiga::CUDA::ThreadInfo<> ti;
     bool is_ship_rbID = false;
+
+    int ballId = (regular_ball) ? ball1Id : ball2Id;
     for (int shipIdx = 0; shipIdx < *d_shipInfosCounter; shipIdx++) {
         ShipInfo &shipInfo = d_shipInfos[shipIdx];
         if (ti.thread_id == shipInfo.rbID) {
@@ -3177,7 +3246,7 @@ __global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *r
         }
     }
 
-    if (is_ship_rbID || ti.thread_id == 0 || ti.thread_id == ball) {
+    if (is_ship_rbID || ti.thread_id == 0 || ti.thread_id == ballId || ti.thread_id >= iceStartId && ti.thread_id < iceEndId) {
 
         vec3 originOfMass = rigidBodies[ti.thread_id].originOfMass;
 
@@ -3190,10 +3259,10 @@ __global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *r
             if (ti.thread_id == 0) {
                 weight = 5;
             }
-            else if (ti.thread_id == ball) {
+            else if (ti.thread_id == ballId) {
                 weight = 2;
                 // discard ball if it is underwater
-                if (originOfMass[1] < 2)
+                if (originOfMass[1] < 1.5)
                     return;
             }
 
@@ -3233,14 +3302,15 @@ void ParticleSystem::update(float dt) {
         if (control_cannonball == 1 && (cannon_timer >= cannon_timer_reset || debug_shooting)) {
             resetHits<<<BLOCKS, BLOCK_SIZE>>>(d_particleHits, particleCount, d_rbHits, rigidBodyCount);
             CUDA_SYNC_CHECK_ERROR();
-            shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, cannonball_speed, objects["player"], objects["ball_1"], objects["cannon"]);
+            shootCannon<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, camera_direction, cannonball_speed, objects["player"], objects["ball_1"], objects["ball_2"], objects["cannon"], regular_ball);
             CUDA_SYNC_CHECK_ERROR();
             cannon_timer = 0;
         }
 
         float random = linearRand(-0.9, 0.9);
         resetEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_enemyGridWeight, enemyGridDim);
-        fillEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"]);
+        fillEnemyGrid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_enemyGridWeight, d_enemyGridId, mapDim, fluidDim, d_shipInfos, 
+            d_shipInfosCounter, random, enemyGridDim, enemyGridCell, objects["ball_1"], objects["ball_2"], objects["ice_start"], objects["ice_end"]+1, regular_ball);
         
         updateParticlesPBD1_radius<<<BLOCKS, BLOCK_SIZE>>>(dt, gravity, d_particles, damp_v, particleRadiusWater, particleRadiusCloth, objects["cannon"], objects["player_penguin"]);
 
@@ -3411,7 +3481,6 @@ __global__ void rayInfo(Saiga::ArrayView<Particle> particles, Saiga::Ray ray, th
         return;
     if (ti.thread_id == 0) {
         Particle &particle = particles[list[min].first];
-        printf("\nParticle Info:\n");
         printf("idx: %i; id: %i; rbID: %i, position: %f, radius: %f, mass: %f, rgb: %f, %f, %f;\n", list[min].first, particle.id, particle.rbID, particle.predicted, particle.radius, 1.0f/particle.massinv, particle.color[0], particle.color[1], particle.color[2]);
         
         int shipIdx = -1;

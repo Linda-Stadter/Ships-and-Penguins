@@ -40,7 +40,7 @@ Agphys::Agphys()
 
     sun = std::make_shared<DirectionalLight>();
     renderer->lighting.AddLight(sun);
-    sun->setDirection(vec3(-1, -3, -2));
+    sun->setDirection(vec3(-1.5, -2.5, 2));
     sun->setColorDiffuse(vec3(0.8, 0.8, 1));
     sun->setIntensity(0.6f);
     sun->setAmbientIntensity(0.3f);
@@ -411,6 +411,7 @@ void VertexBuffer<Particle>::setVertexAttributes()
 void Agphys::updateControlsAndCamera(float delta)
 {
     int shoot_key = GLFW_KEY_C;
+    int switch_cannon_key = GLFW_KEY_LEFT_SHIFT;
     std::vector<int> keyboardmap = {GLFW_KEY_T, GLFW_KEY_G, GLFW_KEY_F, GLFW_KEY_H};
     if (gameMode) {
         shoot_key = GLFW_KEY_SPACE;
@@ -420,6 +421,10 @@ void Agphys::updateControlsAndCamera(float delta)
     particleSystem->control_forward = keyboard.getMappedKeyState(0, keyboardmap) - keyboard.getMappedKeyState(1, keyboardmap);
     particleSystem->control_rotate = keyboard.getMappedKeyState(2, keyboardmap) - keyboard.getMappedKeyState(3, keyboardmap);
     particleSystem->control_cannonball = keyboard.getMappedKeyState(0, {shoot_key});
+
+    if (keyboard.getMappedKeyState(0, {switch_cannon_key})) {
+        particleSystem->regular_ball = !particleSystem->regular_ball;
+    }
 
     if (camera_follow) {
         vec3 position = particleSystem->ship_position;

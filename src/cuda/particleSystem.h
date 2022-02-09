@@ -82,6 +82,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     int maxShipNum = 20;
 
     int particleFishStart;
+    int particleSwordfishStart;
     int fishID;
 
     int *d_constraintCounter;
@@ -104,7 +105,7 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     int *d_enemyGridWeight;
     int *d_enemyGridId;
-    int enemyGridDim = 15;
+    int enemyGridDim = 20;
     float enemyGridCell = 0;
 
     vec3 gravity = {0, -9.81, 0};
@@ -172,6 +173,7 @@ class SAIGA_ALIGN(16) ParticleSystem
 
     int score = 0;
     bool game_over = false;
+    bool regular_ball = true;
 
     // map parameters
     vec3 mapDim ={0, 0, 0};
