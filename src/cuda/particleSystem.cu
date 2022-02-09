@@ -2527,8 +2527,10 @@ __device__ void registerHit(Saiga::ArrayView<Particle> particles, int score_part
     }
 }
 
-__global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::ArrayView<Particle> particles, ClothConstraint *d_constraintListCloth, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize, int exception, int ball, int* d_particleHits, int* d_rbHits) {
+__global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::ArrayView<Particle> particles, ClothConstraint *d_constraintListCloth, std::pair<int, int>* cell_list, int* particle_list, int *constraints, int *constraintCounter, int maxConstraintNum, ivec3 cell_dims, int cellCount, float cellSize, int exception, int ball1Id, int ball2Id, int* d_particleHits, int* d_rbHits, bool regular_ball) {
     Saiga::CUDA::ThreadInfo<> ti;
+    int ballId = (regular_ball) ? ball1Id : ball2Id;
+
     if (ti.thread_id < particles.size()) {
         ParticleCalc pa;
         ParticleCalc pb;
@@ -2565,10 +2567,10 @@ __global__ void createConstraintParticlesLinkedCellsRigidBodiesFluid(Saiga::Arra
                     if (d0 > 0) {
 
                         // hit detection
-                        if (rbIDa == ball) {
+                        if (rbIDa == ballId) {
                             registerHit(particles, neighbor_particle_idx, rbIDb, d_particleHits, d_rbHits);
                         }
-                        else if (rbIDb == ball) {
+                        else if (rbIDb == ballId) {
                             registerHit(particles, ti.thread_id, rbIDa, d_particleHits, d_rbHits);
                         }
 
@@ -3337,7 +3339,8 @@ void ParticleSystem::update(float dt) {
         calculateHash<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
         thrust::sort_by_key(thrust::device_pointer_cast(d_particle_hash), thrust::device_pointer_cast(d_particle_hash) + particleCount, d_particles.device_begin());
         createLinkedCellsOptimized<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_particle_hash, d_cell_list, d_particle_list, cellDim, cellCount, cellSize);
-        createConstraintParticlesLinkedCellsRigidBodiesFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_constraintListCloth, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, maxConstraintNum, cellDim, cellCount, cellSize, objects["cannon"], objects["ball_1"], d_particleHits, d_rbHits);
+        createConstraintParticlesLinkedCellsRigidBodiesFluid<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_constraintListCloth, d_cell_list, d_particle_list, d_constraintList, d_constraintCounter, 
+            maxConstraintNum, cellDim, cellCount, cellSize, objects["cannon"], objects["ball_1"], objects["ball_2"], d_particleHits, d_rbHits, regular_ball);
         computeScore();
         createConstraintWalls<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_walls, d_constraintListWalls, d_constraintCounterWalls, maxConstraintNumWalls, objects["ball_1"], objects["enemy_6"]+1);
         
