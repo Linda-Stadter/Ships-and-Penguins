@@ -1014,11 +1014,15 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos + spawnPos, rot, penguin_color, penguinModel, penguin_paramters["scaling"], penguin_paramters["mass"], penguin_paramters["particleCount"], false);
     particleCountRB += objParticleCount;
 
-    clothConstraints.push_back({particleShipStart + 535, particlePenguinStart + 84, 0, 0});
+    int constraintsStart = clothConstraints.size();
+
+    /*clothConstraints.push_back({particleShipStart + 535, particlePenguinStart + 84, 0, 0});
     clothConstraints.push_back({particleShipStart + 534, particlePenguinStart + 83, 0, 0});
-    clothConstraints.push_back({particleShipStart + 536, particlePenguinStart + 85, 0, 0});
+    clothConstraints.push_back({particleShipStart + 536, particlePenguinStart + 85, 0, 0});*/
 
-
+    clothConstraints.push_back({particleShipStart + 640+4+1, particlePenguinStart + 94+1, .5, 1}); //374
+    clothConstraints.push_back({particleShipStart + 640+4+2, particlePenguinStart + 94+2, .5, 1});
+    clothConstraints.push_back({particleShipStart + 640+4+3, particlePenguinStart + 94+3, .5, 1});
 
     int particleClothStart = particleCountRB;
 
@@ -1037,7 +1041,6 @@ void ParticleSystem::spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedMod
     //std::vector<ClothConstraint> clothConstraints(0);
     //std::vector<ClothBendingConstraint> clothBendingConstraints(0);
 
-    int constraintsStart = clothConstraints.size();
     int initActiveState = 150; // 150 frames ~ 5sec * 30 fps
 
     // lower fixture
@@ -1623,7 +1626,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         wave_number = 3.5;
         steepness = 0.35;
         wind_direction = {-1.0, 0.0, -1.0};
-        wind_speed = 0.9;
+        wind_speed = 1.0;
         solver_iterations = 1;
         c_viscosity = 0.02;
         epsilon_vorticity = 0.001;
@@ -1805,6 +1808,28 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         playerPenguinStart = particleCountRB;
         objects["player_penguin"] = rigidBodyCount;
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos + spawnPos, rot, penguin_color, penguinModel, penguin_paramters["scaling"], penguin_paramters["mass"], penguin_paramters["particleCount"], false);
+        particleCountRB += objParticleCount;
+
+        // ice
+        Saiga::UnifiedModel iceModel("objs/ice.obj");
+        Saiga::UnifiedModel iceModel2("objs/ice2.obj");
+        vec4 ice_color = {.95, .95, .95, 1};
+        float ice_mass = 0.15;
+
+        vec3 icePos = {20, 3, 20};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.2, ice_mass, 20, false);
+        particleCountRB += objParticleCount;
+
+        icePos = {-20, 3, 10};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel2, 0.2, ice_mass, 20, false);
+        particleCountRB += objParticleCount;
+
+        icePos = {-20, 3, -30};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel2, 0.3, ice_mass, 20, false);
+        particleCountRB += objParticleCount;
+
+        icePos = {20, 3, -30};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.3, ice_mass, 20, false);
         particleCountRB += objParticleCount;
     }
 
@@ -2432,7 +2457,7 @@ inline __device__ __host__ float range(float value, float min, float max) {
 __device__ float calculateSpray(float C_density, float rho0inv) {
     //float min_density = (1.0f * m) * rho0inv - 1.0;
     float min_density = 5 * rho0inv - 1.0; // 1 * W_poly(0, h) + 3 * W_poly(0.5, h)
-    float max_density = 7.5 * rho0inv - 1.0; // 1 * W_poly(0, h) + 9 * W_poly(0.5, h) // 1.57 + x * 0.66; x= 3: 3.5, 6: 5.5, 9: 7.5
+    float max_density = 8 * rho0inv - 1.0; // 1 * W_poly(0, h) + 9 * W_poly(0.5, h) // 1.57 + x * 0.66; x= 3: 3.5, 6: 5.5, 9: 7.5
     float non_spray = (C_density - min_density) / (max_density - min_density);
     non_spray = range(non_spray, 0, 1);
     float spray = 1.0f - (non_spray * non_spray);
@@ -2502,11 +2527,12 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
         // gischt (spray)
         float spray = calculateSpray(C_density, rho0inv);
         vec4 water_color = {0, 0, 0.8, 1};
-        vec4 spray_color = {1, 1, 1, 1};
+        vec4 spray_color = {0.6, 0.6, 0.8, 1};
         float old_spray = particles[ti.thread_id].color[0];
         float new_spray = spray;
+        float spray_cooldown = 0.9;
         if (new_spray < old_spray)
-            new_spray = old_spray * 0.995;
+            new_spray = old_spray * spray_cooldown;
         particles[ti.thread_id].color = (1.0f - new_spray) * water_color + new_spray * spray_color;
     }
 }

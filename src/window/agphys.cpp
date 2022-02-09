@@ -48,7 +48,7 @@ Agphys::Agphys()
     sun->BuildCascades(3);
     sun->castShadows = true;
 
-    Image img("textures/env_waterfall.jpg");
+    Image img("textures/skymap.jpg");
     skybox = std::make_shared<Skybox>(std::make_shared<Texture>(img));
 
 
