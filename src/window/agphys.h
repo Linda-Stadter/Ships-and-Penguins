@@ -8,6 +8,8 @@
 #include "saiga/opengl/window/WindowTemplate.h"
 #include "saiga/opengl/world/proceduralSkybox.h"
 
+#include "saiga/opengl/world/skybox.h"
+
 #include "particleSystem.h"
 
 #undef SAIGA_USE_FFMPEG
@@ -97,7 +99,7 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
     // Saiga Rendering Stuff
     Saiga::Glfw_Camera<Saiga::PerspectiveCamera> camera;
     SimpleAssetObject groundPlane;
-    Saiga::ProceduralSkybox skybox;
+    std::shared_ptr<Saiga::Skybox> skybox;
     std::shared_ptr<Saiga::DirectionalLight> sun;
 
     // ImGUI Stuff

@@ -48,6 +48,9 @@ Agphys::Agphys()
     sun->BuildCascades(3);
     sun->castShadows = true;
 
+    Image img("textures/env_waterfall.jpg");
+    skybox = std::make_shared<Skybox>(std::make_shared<Texture>(img));
+
 
     std::string shader_name = "shader/particles.glsl";
 
@@ -143,9 +146,9 @@ void Agphys::loadScenario()
     } else if (scenario == 14) {
         // change to resize ocean
         float height = 4;
-        fluidDim = {180, height, 180}; // width in x and z direction in particles
+        fluidDim = {250, height, 250}; // width in x and z direction in particles
         trochoidal1Dim = {5, height, 5}; // width of one side in -x, +x, -z and +z direction in particles
-        trochoidal2Dim = {50, 1, 50};
+        trochoidal2Dim = {100, 1, 100};
 
         // computation of dimensions  
         int trochoidal1Particles = (fluidDim[0] * trochoidal1Dim[0] * 2 + fluidDim[2] * trochoidal1Dim[2] * 2 + trochoidal1Dim[0] * trochoidal1Dim[2] * 4) * height;
@@ -291,10 +294,9 @@ void Agphys::update(float dt)
 
     if (pause) return;
 
+    map();
     // controls
     updateControlsAndCamera(dt);
-
-    map();
     float t;
     {
         Saiga::CUDA::ScopedTimer tim(t);
@@ -363,7 +365,7 @@ void Agphys::render(RenderInfo render_info)
     }
     else if (render_pass == RenderPass::Forward)
     {
-        skybox.render(camera);
+        skybox->render(camera);
     }
     else if (render_pass == RenderPass::GUI)
     {
