@@ -146,9 +146,9 @@ void Agphys::loadScenario()
     } else if (scenario == 14) {
         // change to resize ocean
         float height = 4;
-        fluidDim = {250, height, 250}; // width in x and z direction in particles
+        fluidDim = {170, height, 170}; // width in x and z direction in particles
         trochoidal1Dim = {5, height, 5}; // width of one side in -x, +x, -z and +z direction in particles
-        trochoidal2Dim = {100, 1, 100};
+        trochoidal2Dim = {60, 1, 60};
 
         // computation of dimensions  
         int trochoidal1Particles = (fluidDim[0] * trochoidal1Dim[0] * 2 + fluidDim[2] * trochoidal1Dim[2] * 2 + trochoidal1Dim[0] * trochoidal1Dim[2] * 4) * height;
@@ -411,7 +411,8 @@ void VertexBuffer<Particle>::setVertexAttributes()
 void Agphys::updateControlsAndCamera(float delta)
 {
     int shoot_key = GLFW_KEY_C;
-    int switch_cannon_key = GLFW_KEY_LEFT_SHIFT;
+    int ball1_key = GLFW_KEY_1;
+    int ball2_key = GLFW_KEY_2;
     std::vector<int> keyboardmap = {GLFW_KEY_T, GLFW_KEY_G, GLFW_KEY_F, GLFW_KEY_H};
     if (gameMode) {
         shoot_key = GLFW_KEY_SPACE;
@@ -422,8 +423,11 @@ void Agphys::updateControlsAndCamera(float delta)
     particleSystem->control_rotate = keyboard.getMappedKeyState(2, keyboardmap) - keyboard.getMappedKeyState(3, keyboardmap);
     particleSystem->control_cannonball = keyboard.getMappedKeyState(0, {shoot_key});
 
-    if (keyboard.getMappedKeyState(0, {switch_cannon_key})) {
-        particleSystem->regular_ball = !particleSystem->regular_ball;
+    if (keyboard.getMappedKeyState(0, {ball1_key})) {
+        particleSystem->regular_ball = true;
+    } 
+    if (keyboard.getMappedKeyState(0, {ball2_key})) {
+        particleSystem->regular_ball = false;
     }
 
     if (camera_follow) {
