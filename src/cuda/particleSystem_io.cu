@@ -140,7 +140,7 @@ void ParticleSystem::renderIngameGUI()
     ImGui::End();
 
     if (game_over) {
-        ImGui::SetNextWindowPos(ImVec2(1920/2, 1080/2), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(2560/2, 1440/2), ImGuiCond_Always);
         //ImGui::SetNextWindowSize(ImVec2(1920, 1080), ImGuiCond_Always);
         if(ImGui::Begin("game over", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
         {
@@ -152,7 +152,7 @@ void ParticleSystem::renderIngameGUI()
         }
         ImGui::End();
     } else {
-        ImGui::SetNextWindowPos(ImVec2(1920/2, 1080/2), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(2560/2, 1440/2), ImGuiCond_Always);
         //ImGui::SetNextWindowSize(ImVec2(1920, 1080), ImGuiCond_Always);
         if(ImGui::Begin("crosshair", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
         {

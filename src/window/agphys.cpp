@@ -413,10 +413,27 @@ void Agphys::updateControlsAndCamera(float delta)
     int shoot_key = GLFW_KEY_C;
     int ball1_key = GLFW_KEY_1;
     int ball2_key = GLFW_KEY_2;
-    std::vector<int> keyboardmap = {GLFW_KEY_T, GLFW_KEY_G, GLFW_KEY_F, GLFW_KEY_H};
+    std::vector<int> cameraKeyboardmap0 = {GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_A, GLFW_KEY_D,
+                             //            GLFW_KEY_UP,
+                             //            GLFW_KEY_DOWN,
+                             //            GLFW_KEY_LEFT,
+                             //            GLFW_KEY_RIGHT,
+                             GLFW_KEY_LEFT_SHIFT, GLFW_KEY_SPACE, GLFW_KEY_LEFT_ALT};
+    std::vector<int> cameraKeyboardmap1 = {GLFW_KEY_T, GLFW_KEY_G, GLFW_KEY_F, GLFW_KEY_H,
+                             //            GLFW_KEY_UP,
+                             //            GLFW_KEY_DOWN,
+                             //            GLFW_KEY_LEFT,
+                             //            GLFW_KEY_RIGHT,
+                             GLFW_KEY_LEFT_SHIFT, GLFW_KEY_SPACE, GLFW_KEY_LEFT_ALT};
+    std::vector<int> keyboardmap0 = {GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_A, GLFW_KEY_D};
+    std::vector<int> keyboardmap1 = {GLFW_KEY_T, GLFW_KEY_G, GLFW_KEY_F, GLFW_KEY_H};
+    std::vector<int> keyboardmap = keyboardmap1;
+    camera.keyboardmap = cameraKeyboardmap0;
+
     if (gameMode) {
         shoot_key = GLFW_KEY_SPACE;
-        keyboardmap = {GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_A, GLFW_KEY_D};
+        keyboardmap = keyboardmap0;
+        camera.keyboardmap = cameraKeyboardmap1;
     }
 
     particleSystem->control_forward = keyboard.getMappedKeyState(0, keyboardmap) - keyboard.getMappedKeyState(1, keyboardmap);
@@ -443,6 +460,9 @@ void Agphys::updateControlsAndCamera(float delta)
         vec3 camera_offset = {0, 5, 0};
         float camera_distance = 20;
         vec3 new_camera_position = position + camera_offset - camera_direction * camera_distance;
+
+        // interpolation smoothing
+        new_camera_position = new_camera_position * 0.5 + camera_position * 0.5;
 
         //vec3 up = camera_direction.cross(vec3{0, 1, 0}).cross(camera_direction).normalized();
         vec3 up = {0, 1, 0};
