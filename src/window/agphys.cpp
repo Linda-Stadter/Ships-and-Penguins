@@ -36,7 +36,7 @@ Agphys::Agphys()
     window->setCamera(&camera);
 
     groundPlane.asset = std::make_shared<ColoredAsset>(
-        Saiga::CheckerBoardPlane(ivec2(300, 300), 1.0f, {.1, .1, .8, 1}, {.18, .18, .8, 1}));
+        Saiga::CheckerBoardPlane(ivec2(300, 300), 1.0f, {.2, .2, .675, 1}, {.17, .17, .675, 1}));
 
     sun = std::make_shared<DirectionalLight>();
     renderer->lighting.AddLight(sun);
@@ -157,7 +157,7 @@ void Agphys::loadScenario()
         trochoidal2Particles *= trochoidal2Dim[1];
 
         int fluidParticles = fluidDim[0] * fluidDim[2] * height;
-        int rbParticles = 22480;
+        int rbParticles = 44184;//22480;
         numberParticles = trochoidal1Particles + trochoidal2Particles + fluidParticles + rbParticles;
         
         int heightDifference = height - trochoidal2Dim[1];

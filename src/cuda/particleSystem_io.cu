@@ -141,7 +141,7 @@ void ParticleSystem::renderIngameGUI()
 
     if (game_over) {
         ImGui::SetNextWindowPos(ImVec2(2560/2, 1440/2), ImGuiCond_Always);
-        //ImGui::SetNextWindowSize(ImVec2(1920, 1080), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(500, 1000), ImGuiCond_Always);
         if(ImGui::Begin("game over", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
         {
             ImGui::SetWindowFontScale(2.0);

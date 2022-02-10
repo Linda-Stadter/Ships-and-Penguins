@@ -1927,27 +1927,27 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         particleCountRB += objParticleCount;
 
         // spawns enemies
-        pos ={2, 3, 2};
+        pos ={-10, 3, 45};
         objects["enemy_1"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"], 'L');
 
-        pos ={-15, 3, -25};
+        pos ={-30, 3, 25};
         objects["enemy_2"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"], 'G');
 
-        pos ={17, 3, 10};
+        pos ={10, 3, 10};
         objects["enemy_3"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"], 'D');
 
-        pos ={15, 3, -10};
+        pos ={25, 3, -10};
         objects["enemy_4"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"], 'V');
 
-        pos ={5, 3, -11};
+        pos ={5, 3, -20};
         objects["enemy_5"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
-        pos ={-15, 3, -8};
+        pos ={-15, 3, -35};
         objects["enemy_6"] = rigidBodyCount;
         spawnShip(pos, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
 
@@ -1975,6 +1975,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.2, ice_mass, 20, false);
         particleCountRB += objParticleCount;
 
+        // spawn ice
         icePos = {-20, 3, 10};
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel2, 0.2, ice_mass, 20, false);
         particleCountRB += objParticleCount;
@@ -1986,6 +1987,32 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         objects["ice_end"] = rigidBodyCount;
         icePos = {20, 3, -30};
         objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.3, ice_mass, 20, false);
+        particleCountRB += objParticleCount;
+
+        // fixed ice
+        float ice_hight = 1.5;
+        icePos = {-60, ice_hight, 10};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.2, ice_mass, 15, false, true);
+        particleCountRB += objParticleCount;
+
+        icePos = {70, ice_hight, 20};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.3, ice_mass, 20, false, true);
+        particleCountRB += objParticleCount;
+
+        icePos = {65, ice_hight, -60};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.2, ice_mass, 20, false, true);
+        particleCountRB += objParticleCount;
+
+        icePos = {-75, ice_hight, -20};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.3, ice_mass, 15, false, true);
+        particleCountRB += objParticleCount;
+
+        icePos = {-65, ice_hight, 60};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.2, ice_mass, 20, false, true);
+        particleCountRB += objParticleCount;
+
+        icePos = {70, ice_hight, -70};
+        objParticleCount = loadObj(rigidBodyCount++, particleCountRB, icePos, rot, ice_color, iceModel, 0.3, ice_mass, 20, false, true);
         particleCountRB += objParticleCount;
     }
 
@@ -2038,6 +2065,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     int reset = 0;
     checkError(cudaMemcpy(d_score, &reset, sizeof(int), cudaMemcpyHostToDevice));
 
+    printf("rb particles: %i", particleCountRB);
     // reset game values
     score = 0;
     passed_time = 0;
@@ -3076,7 +3104,7 @@ __device__ void moveRigidBodyEnemies(Saiga::ArrayView<Particle> particles, Rigid
     mat3 normRotation = q.normalized().toRotationMatrix();
 
     vec3 rot = normRotation.eulerAngles(1, 0, 2);
-    rot[0] += rotate * 0.0005;
+    rot[0] += rotate * 0.0002;
     normRotation = Eigen::AngleAxisf(rot[0], vec3::UnitY())
         * Eigen::AngleAxisf(rot[1], vec3::UnitX())
         * Eigen::AngleAxisf(rot[2], vec3::UnitZ());
@@ -3420,7 +3448,7 @@ __global__ void moveRigidBody(Saiga::ArrayView<Particle> particles, int particle
     mat3 normRotation = q.normalized().toRotationMatrix();
 
     vec3 rot = normRotation.eulerAngles(1, 0, 2);
-    rot[0] += rotate * 0.001;
+    rot[0] += rotate * 0.0003;
     normRotation = Eigen::AngleAxisf(rot[0], vec3::UnitY())
         * Eigen::AngleAxisf(rot[1], vec3::UnitX())
         * Eigen::AngleAxisf(rot[2], vec3::UnitZ());
