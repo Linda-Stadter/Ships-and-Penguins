@@ -1775,9 +1775,9 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     else if (scenario == 14) {
         // scene parameters
         wave_number = 3.5;
-        steepness = 0.35;
+        steepness = 0.47;
         wind_direction = {-1.0, 0.0, -1.0};
-        wind_speed = 1.0;
+        wind_speed = 0.90;
         solver_iterations = 1;
         c_viscosity = 0.02;
         epsilon_vorticity = 0.001;
