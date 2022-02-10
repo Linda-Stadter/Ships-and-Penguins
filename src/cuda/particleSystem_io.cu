@@ -140,15 +140,22 @@ void ParticleSystem::renderIngameGUI()
     ImGui::End();
 
     if (game_over) {
-        ImGui::SetNextWindowPos(ImVec2(2560/2, 1440/2), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(500, 1000), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(2560/2-100, 1440/2-100), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(270, 100), ImGuiCond_Always);
         if(ImGui::Begin("game over", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
         {
             ImGui::SetWindowFontScale(2.0);
+
             std::string score_string = "Your Score: ";
+            if (score >= high_score)
+                score_string = "New Highscore: ";
             score_string.append(std::to_string(score));
+
+            std::string high_score_string = "High Score: ";
+            high_score_string.append(std::to_string(high_score));
             
             ImGui::TextColored(ImColor(1.f, 0.f, 1.f, 1.f), score_string.c_str());
+            ImGui::TextColored(ImColor(1.f, 0.f, 1.f, 1.f), high_score_string.c_str());
         }
         ImGui::End();
     } else {

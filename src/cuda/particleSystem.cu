@@ -2066,12 +2066,15 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
     checkError(cudaMemcpy(d_score, &reset, sizeof(int), cudaMemcpyHostToDevice));
 
     printf("rb particles: %i", particleCountRB);
-    // reset game values
-    score = 0;
+    // reset game values    
     passed_time = 0;
     bonus_flag = false;
     ammo_left = 3;
     game_over = false;
+
+    if (score >= high_score)
+        high_score = score;
+    score = 0;
 
     colorObjects<<<BLOCKS, BLOCK_SIZE>>>(d_particles, d_rigidBodies, d_shipInfos, d_shipInfosCounter, particleFishStart, particleSwordfishStart, cannonStart, playerPenguinStart);
 }
@@ -3338,7 +3341,7 @@ void ParticleSystem::update(float dt) {
     if (bonus_flag && score > bonus_score) {
         bonus_flag = false;
         bonus_score = 0;
-        ammo_left += ammo_bonus;
+        ammo_left = ammo_bonus;
     }
     if (physics_mode == 0) {      
         const unsigned int BLOCKS_CELLS = Saiga::CUDA::getBlockCount(cellCount, BLOCK_SIZE);

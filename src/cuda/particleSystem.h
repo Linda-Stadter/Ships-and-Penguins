@@ -172,6 +172,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     float cannon_timer_reset = 120;
 
     int score = 0;
+    int high_score = 200; // init highscore
     bool game_over = false;
     bool regular_ball = true;
 
@@ -179,7 +180,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     bool bonus_flag = false;
     int bonus_score = 0;
     int ammo_left = 3;
-    int ammo_bonus = 2;
+    int ammo_bonus = 3;
 
     // map parameters
     vec3 mapDim ={0, 0, 0};
