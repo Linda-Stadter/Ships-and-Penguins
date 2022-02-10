@@ -36,7 +36,7 @@ Agphys::Agphys()
     window->setCamera(&camera);
 
     groundPlane.asset = std::make_shared<ColoredAsset>(
-        Saiga::CheckerBoardPlane(ivec2(300, 300), 1.0f, {.0, .1, .7, 1}, {.1, .2, .8, 1}));
+        Saiga::CheckerBoardPlane(ivec2(300, 300), 1.0f, {.1, .1, .8, 1}, {.18, .18, .8, 1}));
 
     sun = std::make_shared<DirectionalLight>();
     renderer->lighting.AddLight(sun);

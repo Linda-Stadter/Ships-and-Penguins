@@ -2689,7 +2689,7 @@ __global__ void computeDensityAndLambda(Saiga::ArrayView<Particle> particles, st
         // gischt (spray)
         float spray = calculateSpray(C_density, rho0inv);
         vec4 water_color = {0, 0, 0.8, 1};
-        vec4 spray_color = {0.6, 0.6, 0.8, 1};
+        vec4 spray_color = {0.7, 0.7, 0.8, 1};
         float old_spray = particles[ti.thread_id].color[0];
         float new_spray = spray;
         float spray_cooldown = 0.9;
@@ -2888,19 +2888,22 @@ __device__ vec3 trochoidalWaveOffset(vec3 gridPoint, vec2 direction, float wave_
 }
 
 __device__ vec4 colorTrochoidalParticles(vec3 position, vec3 old_position, vec4 color) {
-    vec4 d_color = vec4(0.01, 0.01, 0.01, 0.01);
-    float rand = ((int)position[0] + (int)position[2]) % 17 * 0.05;
+    vec4 d_color = vec4(0.01, 0.01, 0.00, 0.01);
+    float rand = abs(((int)position[0] + (int)position[2])) % 17 * 0.07;
 
     if (old_position[1] - position[1] > -0.15) {
-        color -= d_color * 3;
+        color -= d_color * 2;
     }
     else {
         color += d_color * abs(rand);
     }
 
-    if (color[2] <= 0.8) {
-        color = vec4(0.1 + 0.05*rand, 0.1 + 0.05*rand, 0.8, 1);
+    if (color[0] >= 0.5) {
+        color = vec4(0.5 - 0.1*rand, 0.5 - 0.1*rand, 0.8, 1);
     }
+    if (color[0] <= 0.1) {
+       color = vec4(0.1 + 0.04*rand, 0.1 + 0.04*rand, 0.8, 1);
+   }
 
     return color;
 }
@@ -3020,7 +3023,7 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
         vec3 originOfMass = rigidBodies[shipRbId].originOfMass;
 
         if (originOfMass[0] <= -mapDim[0]/2 || originOfMass[0] >= mapDim[0]/2 || originOfMass[2] <= -mapDim[2]/2 || originOfMass[2] >= mapDim[2]/2) {
-            originOfMass = {-fluidDim[0]/2 * random, 3, -mapDim[2]/2 + 3};
+            originOfMass = {-fluidDim[0]/2 * random, 2.2, -mapDim[2]/2 + 3};
             if (cloth) {
                 int x = 16; // has to be dimX from spawn
                 int z = 1;
@@ -3188,7 +3191,7 @@ __global__ void moveEnemies(Saiga::ArrayView<Particle> particles, RigidBody *rig
 
         if (originOfMass[0] <= -mapDim[0]/2 || originOfMass[0] >= mapDim[0]/2 || originOfMass[2] <= -mapDim[2]/2 || originOfMass[2] >= mapDim[2]/2) {
             // reset
-            originOfMass ={-fluidDim[0]/2 * random, 3, -mapDim[2]/2 + 3};
+            originOfMass ={-fluidDim[0]/2 * random, 2.2, -mapDim[2]/2 + 3};
             rigidBodies[ti.thread_id].originOfMass = originOfMass;
 
             // penguin
@@ -3264,7 +3267,7 @@ __global__ void fillEnemyGrid(Saiga::ArrayView<Particle> particles, RigidBody *r
             int weight = 1;
             // high weighting for player
             if (ti.thread_id == 0) {
-                weight = 5;
+                weight = 2;
             }
             else if (ti.thread_id == ballId) {
                 weight = 2;
