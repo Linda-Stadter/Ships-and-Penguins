@@ -67,7 +67,7 @@ class SAIGA_ALIGN(16) ParticleSystem
     void updateRigidBodies();
     void computeScore();
 
-    int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass, float maxParticleCount, bool stripes);
+    int loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass, float maxParticleCount, bool stripes, bool fixed);
     int loadBox(int rigidBodyCount, int particleCountRB, ivec3 dim, vec3 pos, vec3 rot, vec4 color, bool fixed, float mass, float scaling, float particleRadius, bool noSDF);
     void spawnShip(vec3 spawnPos, vec4 ship_color, Saiga::UnifiedModel shipModel, float scaling, float particleMass, float maxObjParticleCount, char printChar);
 

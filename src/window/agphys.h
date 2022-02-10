@@ -78,6 +78,7 @@ class Agphys : public StandaloneWindow<WindowManagement::GLFW, DeferredRenderer>
                                  "SPH Trochoidal Mixture Test", "Game Map"};
     int scenario = 14;
 
+    vec3 last_camera_direction;
 
     float randInitMul = 0.001;
 

@@ -417,7 +417,7 @@ __global__ void initRigidBodyParticles(Saiga::ArrayView<Particle> particles, int
 }
 
 // 4.4
-int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass = 1, float maxObjParticleCount = 30, bool stripes = true) {
+int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, vec3 rot, vec4 color, Saiga::UnifiedModel model, float scaling, float particleMass = 1, float maxObjParticleCount = 30, bool stripes = true, bool fixed = false) {
     Saiga::UnifiedMesh mesh = model.CombinedMesh().first;
     std::vector<Triangle> triangles = mesh.TriangleSoup();
     // 1
@@ -534,7 +534,7 @@ int ParticleSystem::loadObj(int rigidBodyCount, int particleCountRB, vec3 pos, v
                         count++;
                         vec3 position = pos + ori*(scaling / sampleDistance);
                         vec3 sdf = (float)voxel[z][y][x].first * normalize(voxel[z][y][x].second);
-                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, false, particleMass, scaling, stripes);
+                        initSingleRigidBodyParticle<<<1, 32>>>(d_particles, rigidBodyCount, position, sdf, color, particleCountRB++, d_rigidBodies, fixed, particleMass, scaling, stripes);
                     }
                 }
             }

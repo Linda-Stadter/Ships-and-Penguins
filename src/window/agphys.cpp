@@ -146,9 +146,9 @@ void Agphys::loadScenario()
     } else if (scenario == 14) {
         // change to resize ocean
         float height = 4;
-        fluidDim = {170, height, 170}; // width in x and z direction in particles
+        fluidDim = {200, height, 200}; // width in x and z direction in particles
         trochoidal1Dim = {5, height, 5}; // width of one side in -x, +x, -z and +z direction in particles
-        trochoidal2Dim = {60, 1, 60};
+        trochoidal2Dim = {80, 1, 80};
 
         // computation of dimensions  
         int trochoidal1Particles = (fluidDim[0] * trochoidal1Dim[0] * 2 + fluidDim[2] * trochoidal1Dim[2] * 2 + trochoidal1Dim[0] * trochoidal1Dim[2] * 4) * height;
@@ -454,11 +454,13 @@ void Agphys::updateControlsAndCamera(float delta)
         vec3 p = camera.ViewToWorld(camera.NormalizedToView({0, 0, 1}));
         vec3 camera_position = camera.getPosition();
         vec3 camera_direction = (p - camera_position).normalized();
-        particleSystem->camera_direction = camera_direction;
+        // interpolation smoothing
+        particleSystem->camera_direction = camera_direction * 0.3 + last_camera_direction * 0.7;
+        last_camera_direction = camera_direction;
             
         //vec3 new_camera_position = position + vec3{10, 20, 0};
-        vec3 camera_offset = {0, 5, 0};
-        float camera_distance = 20;
+        vec3 camera_offset = {0, 4, 0};
+        float camera_distance = 23;
         vec3 new_camera_position = position + camera_offset - camera_direction * camera_distance;
 
         // interpolation smoothing

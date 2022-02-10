@@ -157,7 +157,7 @@ void ParticleSystem::renderIngameGUI()
         if(ImGui::Begin("crosshair", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
         {
             ImGui::SetWindowFontScale(2.0);
-            ImGui::TextColored(ImColor(1.f, 0.f, 1.f, 1.f), "+");
+            ImGui::TextColored(ImColor(0.f, 0.f, 0.f, 1.f), "+");
         }
         ImGui::End();
     }
