@@ -1891,7 +1891,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         vec3 rot = {0,0,0};
         ivec3 dim = {5,5,5};
 
-        vec3 pos = {0, 10, 0};
+        vec3 pos = {0, 3, 0};
 
         objects["player"] = rigidBodyCount;
         int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, ship_color, shipModel, ship_paramters["scaling"], ship_paramters["mass"], ship_paramters["particleCount"]);
@@ -1907,7 +1907,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         ivec3 dim ={3, 3, 3};
 
         color ={.5, .5, .5, 0.5};
-        vec3 pos ={0, 20, 0};
+        vec3 pos ={0, 1, 0};
 
         // spawns cannonball
         particleFishStart = particleCountRB;
@@ -1918,7 +1918,7 @@ void ParticleSystem::reset(int x, int z, vec3 corner, float distance, float rand
         int objParticleCount = loadObj(rigidBodyCount++, particleCountRB, pos, rot, fish_color, fishModel, 0.05, 0.03, 15, false);
         particleCountRB += objParticleCount;
 
-        pos ={0, 35, 0};
+        pos ={2, 1, 0};
         particleSwordfishStart = particleCountRB;
         Saiga::UnifiedModel swordfishModel("objs/swordfish.obj");
         objects["ball_2"] = rigidBodyCount;
@@ -3047,6 +3047,7 @@ __global__ void resetEnemyParticles(Saiga::ArrayView<Particle> particles, RigidB
                 p.velocity = {0, 0, 0};
                 p.lambda = 0;
             } else if (ship) {
+                rigidBodies[shipRbId].A = mat3::Identity();
                 p.position = rigidBodies[shipRbId].A * p.relative + originOfMass;
                 p.predicted = p.position;
                 p.d_predicted = {0, 0, 0};
